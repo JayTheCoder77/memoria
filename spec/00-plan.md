@@ -26,7 +26,10 @@ can plug in without custom integration work.
 - **Monorepo:** Turborepo, orchestrating polyglot apps (Python apps wrapped with a
   thin `package.json` so `turbo` can run their tasks alongside the TS app).
 - **Storage:** Postgres + pgvector (single DB for metadata + embeddings in MVP).
+  Full schema in `spec/06-database.md`.
 - **Cache:** Redis, fronting the read path for hot/recent/frequent memories.
+- **Auth:** Google OAuth for humans (web dashboard login, session JWT), API keys
+  for machines (MCP server → Memory API, stateless Bearer token). See `spec/05-auth.md`.
 - **Embeddings:** small, fast embedding model — latency matters more than max quality here.
 - **Extraction:** batched LLM pass over event buffers, not per-message.
 

@@ -12,7 +12,12 @@ memory-layer/
 │   │   │   ├── main.py
 │   │   │   ├── routers/
 │   │   │   │   ├── memories.py
+│   │   │   │   ├── auth.py        # Google OAuth verification, session JWT issuance
+│   │   │   │   ├── keys.py        # API key create/revoke (session-JWT protected)
 │   │   │   │   └── health.py
+│   │   │   ├── middleware/
+│   │   │   │   ├── auth.py        # API key hashing/validation, rate limiting
+│   │   │   │   └── session.py     # session JWT validation (dashboard routes)
 │   │   │   ├── services/
 │   │   │   │   ├── extraction.py  # LLM pass: events -> candidate memories
 │   │   │   │   ├── retrieval.py   # hybrid search
@@ -20,9 +25,9 @@ memory-layer/
 │   │   │   │   ├── dedup.py       # embedding-similarity dedup/consolidation
 │   │   │   │   └── cache.py       # Redis read-through cache
 │   │   │   ├── db/
-│   │   │   │   ├── models.py
+│   │   │   │   ├── models.py        # orgs, users, api_keys, memories, event_buffer
 │   │   │   │   ├── session.py
-│   │   │   │   └── migrations/    # Alembic
+│   │   │   │   └── migrations/      # Alembic
 │   │   │   ├── schemas/
 │   │   │   │   └── memory.py      # Pydantic models
 │   │   │   └── config.py
@@ -46,12 +51,16 @@ memory-layer/
 │       ├── app/
 │       │   ├── (marketing)/
 │       │   │   └── page.tsx       # landing page
+│       │   ├── (auth)/
+│       │   │   └── login/         # Google OAuth sign-in page
 │       │   ├── dashboard/
 │       │   │   ├── memories/
+│       │   │   ├── keys/          # API key management (create/revoke)
 │       │   │   └── settings/
 │       │   └── api/
 │       ├── components/
 │       ├── lib/
+│       │   └── auth.ts            # Auth.js Google provider config
 │       └── package.json
 │
 ├── packages/

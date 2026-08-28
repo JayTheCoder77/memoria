@@ -31,6 +31,15 @@
 - [ ] MCP server: `forget` tool → calls `DELETE /memories/{id}`
 - [ ] Define MCP tool schemas so `org_id`/`session_id`/auth are required arguments
       on every call (no server-side session state to fall back on)
+- [ ] API key auth: hashing/validation middleware on Memory API (see `spec/05-auth.md`)
+- [ ] API key auth: rate limiting keyed to API key
+- [ ] Google OAuth app registration (client ID/secret)
+- [ ] `POST /auth/google` — verify ID token, find-or-create user + org, issue session JWT
+- [ ] Session JWT validation middleware for dashboard-only routes
+- [ ] `users` / `orgs` tables + migrations
+- [ ] `memories` table + pgvector index (ivfflat) + composite `(org_id, session_id)` index
+- [ ] `event_buffer` table + status/created_at index for worker polling
+- [ ] Web app: Google sign-in page (Auth.js), key management page (create/revoke)
 - [ ] End-to-end test: connect a harness to the MCP server locally, verify round trip
 
 ## Phase 3 — Intelligence

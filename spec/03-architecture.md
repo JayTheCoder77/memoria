@@ -11,6 +11,7 @@
 - **Redis** — read-through cache in front of the vector search, keyed on
   `(org_id, query_hash)` or similar. This is what makes recall fast.
 - **Postgres + pgvector** — source of truth: memory content, embeddings, metadata.
+  Full schema in `spec/06-database.md`.
 - **Extraction Worker** — background job/process consuming buffered harness events,
   running a batched LLM extraction pass, deduping against existing memories, and
   writing new ones. Fully async — never blocks a harness turn.
