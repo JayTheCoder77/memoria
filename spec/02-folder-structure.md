@@ -1,0 +1,85 @@
+# Folder Structure
+
+Polyglot Turborepo monorepo. Python apps get a thin `package.json` so `turbo` can
+orchestrate their scripts (`turbo run dev`, `turbo run test`) alongside the TS app —
+same pattern as Rio's polyglot setup.
+
+```
+memory-layer/
+├── apps/
+│   ├── memory-api/                # Python (FastAPI) — core memory service
+│   │   ├── src/
+│   │   │   ├── main.py
+│   │   │   ├── routers/
+│   │   │   │   ├── memories.py
+│   │   │   │   └── health.py
+│   │   │   ├── services/
+│   │   │   │   ├── extraction.py  # LLM pass: events -> candidate memories
+│   │   │   │   ├── retrieval.py   # hybrid search
+│   │   │   │   ├── scoring.py     # semantic + recency + importance
+│   │   │   │   ├── dedup.py       # embedding-similarity dedup/consolidation
+│   │   │   │   └── cache.py       # Redis read-through cache
+│   │   │   ├── db/
+│   │   │   │   ├── models.py
+│   │   │   │   ├── session.py
+│   │   │   │   └── migrations/    # Alembic
+│   │   │   ├── schemas/
+│   │   │   │   └── memory.py      # Pydantic models
+│   │   │   └── config.py
+│   │   ├── tests/
+│   │   ├── pyproject.toml
+│   │   └── package.json           # turbo task wrapper only
+│   │
+│   ├── mcp-server/                # Python (MCP SDK) — protocol adapter
+│   │   ├── src/
+│   │   │   ├── server.py
+│   │   │   ├── tools/
+│   │   │   │   ├── remember.py
+│   │   │   │   ├── recall.py
+│   │   │   │   └── forget.py
+│   │   │   └── client.py          # thin HTTP client -> memory-api
+│   │   ├── tests/
+│   │   ├── pyproject.toml
+│   │   └── package.json           # turbo task wrapper only
+│   │
+│   └── web/                       # TypeScript (Next.js) — dashboard + landing page
+│       ├── app/
+│       │   ├── (marketing)/
+│       │   │   └── page.tsx       # landing page
+│       │   ├── dashboard/
+│       │   │   ├── memories/
+│       │   │   └── settings/
+│       │   └── api/
+│       ├── components/
+│       ├── lib/
+│       └── package.json
+│
+├── packages/
+│   ├── shared-types/               # TS types mirroring API schemas (used by web)
+│   └── config/                     # shared ruff / eslint / tsconfig configs
+│
+├── infra/
+│   ├── docker-compose.yml          # postgres+pgvector, redis — local dev
+│   └── seed/                       # seed data for local testing
+│
+├── spec/                           # this folder
+│   ├── 00-plan.md
+│   ├── 01-todolist.md
+│   ├── 02-folder-structure.md
+│   ├── 03-architecture.md
+│   └── 04-workflow-dataflow.md
+│
+├── turbo.json
+├── package.json                    # root workspace definition
+└── README.md
+```
+
+## Notes
+- `memory-api` and `mcp-server` are separate deployable services — the MCP server
+  is a thin adapter, never touches the DB directly.
+- `mcp-server` is stateless and safe to run as multiple instances behind a load
+  balancer — no session affinity required. Every tool call must carry `org_id`/
+  `session_id`/auth explicitly (see `spec/03-architecture.md`).
+- `shared-types` keeps the web dashboard's TS types in sync with the Python API's
+  Pydantic schemas (generate or hand-sync for MVP; codegen is a fast-follow).
+- No `packages/` code should own business logic — that stays in `memory-api`.

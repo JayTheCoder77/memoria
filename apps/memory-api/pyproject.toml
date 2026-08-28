@@ -1,0 +1,7 @@
+[project]
+name = "memory-api"
+version = "0.1.0"
+description = "Memory api"
+
+requires-python = ">=3.12"
+dependencies = []
