@@ -23,7 +23,7 @@ memory-layer/
 │   │   │   │   ├── retrieval.py   # hybrid search
 │   │   │   │   ├── scoring.py     # semantic + recency + importance
 │   │   │   │   ├── dedup.py       # embedding-similarity dedup/consolidation
-│   │   │   │   └── cache.py       # Redis read-through cache
+│   │   │   │   └── embedding.py   # in-process embedding model (read + write paths)
 │   │   │   ├── db/
 │   │   │   │   ├── models.py        # orgs, users, api_keys, memories, event_buffer
 │   │   │   │   ├── session.py
@@ -41,6 +41,7 @@ memory-layer/
 │   │   │   ├── tools/
 │   │   │   │   ├── remember.py
 │   │   │   │   ├── recall.py
+│   │   │   │   ├── update.py
 │   │   │   │   └── forget.py
 │   │   │   └── client.py          # thin HTTP client -> memory-api
 │   │   ├── tests/
@@ -68,15 +69,18 @@ memory-layer/
 │   └── config/                     # shared ruff / eslint / tsconfig configs
 │
 ├── infra/
-│   ├── docker-compose.yml          # postgres+pgvector, redis — local dev
+│   ├── docker-compose.yml          # postgres+pgvector — local dev
 │   └── seed/                       # seed data for local testing
 │
-├── spec/                           # this folder
+├── spec/                           # this folder — backend/infra specs
 │   ├── 00-plan.md
 │   ├── 01-todolist.md
 │   ├── 02-folder-structure.md
 │   ├── 03-architecture.md
-│   └── 04-workflow-dataflow.md
+│   ├── 04-workflow-dataflow.md
+│   ├── 05-auth.md
+│   ├── 06-database.md
+│   └── design/                     # separate spec set — see spec/design/06-folder-structure.md
 │
 ├── turbo.json
 ├── package.json                    # root workspace definition

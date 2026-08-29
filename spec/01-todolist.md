@@ -5,7 +5,7 @@
 - [ ] Scaffold `apps/memory-api` (Python, FastAPI, `pyproject.toml`)
 - [ ] Scaffold `apps/mcp-server` (Python, MCP SDK, `pyproject.toml`)
 - [ ] Scaffold `apps/web` (TypeScript, Next.js)
-- [ ] `infra/docker-compose.yml` — Postgres+pgvector, Redis, local dev
+- [ ] `infra/docker-compose.yml` — Postgres+pgvector, local dev
 - [ ] Shared config packages (ruff config for Python, eslint/tsconfig for TS)
 - [ ] Root README with setup instructions
 
@@ -16,18 +16,20 @@
 - [ ] Embedding pipeline (single function: text → vector)
 - [ ] `POST /memories` — write endpoint
 - [ ] `GET /memories/search` — basic vector similarity read endpoint (no scoring yet)
+- [ ] `PATCH /memories/{id}` — update endpoint (content/importance/memory_type; re-embeds if content changes)
 - [ ] `DELETE /memories/{id}` — forget endpoint
 - [ ] Multi-tenant scoping enforced at the query layer (org_id required on every call)
 - [ ] Basic test suite (write → read round trip, tenant isolation test)
 
 ## Phase 2 — Speed + retrieval
 - [ ] Retrieval scoring: combine semantic similarity + recency decay + importance weight
-- [ ] Redis cache layer in front of `GET /memories/search`
-- [ ] Cache invalidation strategy on write (or TTL-based, pick one for MVP)
+- [ ] pgvector index tuning (`ivfflat` to start) + `(org_id, session_id)` composite index
+- [ ] In-process embedding model wired into both read and write paths
 - [ ] Token-budget-aware top-k truncation on recall responses
-- [ ] Latency benchmark script (p50/p95 on read path, cached vs uncached)
+- [ ] Latency benchmark script (p50/p95 on the direct-query read path)
 - [ ] MCP server: `remember` tool → calls `POST /memories`
 - [ ] MCP server: `recall` tool → calls `GET /memories/search`
+- [ ] MCP server: `update` tool → calls `PATCH /memories/{id}`
 - [ ] MCP server: `forget` tool → calls `DELETE /memories/{id}`
 - [ ] Define MCP tool schemas so `org_id`/`session_id`/auth are required arguments
       on every call (no server-side session state to fall back on)

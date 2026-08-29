@@ -23,7 +23,8 @@ tool for showing live system state (key status, latency, memory counts).
   and it's genuinely useful here (not just aesthetic)
 
 ## API Keys page
-- Table: key prefix (`mem_live_...`, masked after prefix), created date, last
+- Table: key display (`mem_...ab12` — last 4 chars only, per `key_last4` in
+  `spec/06-database.md`), created date, last
   used, status pill (`● Active` accent green / `● Revoked` danger red)
 - `Create new key` button — on creation, show the full key **once** in a
   terminal-styled panel with a `Copy` button and a clear "won't be shown again"
