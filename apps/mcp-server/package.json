@@ -2,7 +2,8 @@
   "name": "mcp-server",
   "private": true,
   "scripts": {
-    "dev": "uv run python -m mcp_server.server",
+    "dev": "uv run python -m mcp_server",
+    "test": "uv run pytest",
     "lint": "uv run ruff check src tests"
   }
 }

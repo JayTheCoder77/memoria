@@ -5,10 +5,12 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from memory_api.auth import get_principal
 from memory_api.db.deps import get_repository
 from memory_api.db.models import Memory
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import MemoryCreate, MemoryOut, MemorySearchResponse, MemoryUpdate
+from memory_api.services.api_keys import Principal
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
 
 router = APIRouter()
@@ -23,12 +25,13 @@ def _to_out(memory: Memory, score: float | None = None) -> MemoryOut:
 @router.post("/memories", response_model=MemoryOut, status_code=status.HTTP_201_CREATED)
 def create_memory(
     body: MemoryCreate,
+    principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
 ) -> MemoryOut:
     embedding = embed_text(body.content, embedder=embedder)
     memory = repo.insert(
-        org_id=body.org_id,
+        org_id=principal.org_id,
         session_id=body.session_id,
         memory_type=body.memory_type,
         content=body.content,
@@ -41,16 +44,16 @@ def create_memory(
 
 @router.get("/memories/search", response_model=MemorySearchResponse)
 def search(
-    org_id: uuid.UUID,
     q: str,
     session_id: str | None = None,
     limit: int = Query(default=10, ge=1, le=100),
+    principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
 ) -> MemorySearchResponse:
     query_embedding = embed_text(q, embedder=embedder)
     rows = repo.search(
-        org_id=org_id,
+        org_id=principal.org_id,
         query_embedding=query_embedding,
         session_id=session_id,
         limit=limit,
@@ -62,11 +65,11 @@ def search(
 def update_memory(
     memory_id: uuid.UUID,
     body: MemoryUpdate,
-    org_id: uuid.UUID,
+    principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
 ) -> MemoryOut:
-    memory = repo.get(org_id=org_id, memory_id=memory_id)
+    memory = repo.get(org_id=principal.org_id, memory_id=memory_id)
     if memory is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found")
 
@@ -84,9 +87,9 @@ def update_memory(
 @router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
 def forget_memory(
     memory_id: uuid.UUID,
-    org_id: uuid.UUID,
+    principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
 ) -> None:
-    deleted = repo.delete(org_id=org_id, memory_id=memory_id)
+    deleted = repo.delete(org_id=principal.org_id, memory_id=memory_id)
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found")

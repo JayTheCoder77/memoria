@@ -5,9 +5,10 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from memory_api.db.deps import get_repository
+from memory_api.db.deps import get_api_key_store, get_repository
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
+from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, get_embedder
 
 
@@ -17,25 +18,44 @@ def repo() -> InMemoryMemoryRepository:
 
 
 @pytest.fixture
-def client(repo: InMemoryMemoryRepository) -> TestClient:
+def keys() -> InMemoryApiKeyStore:
+    return InMemoryApiKeyStore()
+
+
+@pytest.fixture
+def org_id() -> uuid.UUID:
+    return uuid.uuid4()
+
+
+@pytest.fixture
+def raw_key(keys: InMemoryApiKeyStore, org_id: uuid.UUID) -> str:
+    raw = generate_api_key()
+    keys.add(org_id=org_id, raw_key=raw)
+    return raw
+
+
+@pytest.fixture
+def client(repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore) -> TestClient:
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def org_id() -> str:
-    return str(uuid.uuid4())
+def _auth(raw_key: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {raw_key}"}
 
 
-def test_write_then_search_returns_the_same_memory(client: TestClient, org_id: str) -> None:
+def test_write_then_search_returns_the_same_memory(
+    client: TestClient, org_id: uuid.UUID, raw_key: str
+) -> None:
     content = "the deploy pipeline uses uv and pytest"
     created = client.post(
         "/memories",
+        headers=_auth(raw_key),
         json={
-            "org_id": org_id,
             "session_id": "repo-memoria",
             "memory_type": "semantic",
             "content": content,
@@ -44,10 +64,12 @@ def test_write_then_search_returns_the_same_memory(client: TestClient, org_id: s
     )
     assert created.status_code == 201
     memory_id = created.json()["id"]
+    assert created.json()["org_id"] == str(org_id)
 
     search = client.get(
         "/memories/search",
-        params={"org_id": org_id, "q": content, "session_id": "repo-memoria"},
+        headers=_auth(raw_key),
+        params={"q": content, "session_id": "repo-memoria"},
     )
     assert search.status_code == 200
     hits = search.json()["memories"]
@@ -55,14 +77,20 @@ def test_write_then_search_returns_the_same_memory(client: TestClient, org_id: s
     assert hits[0]["content"] == content
 
 
-def test_search_does_not_return_another_orgs_memories(client: TestClient) -> None:
-    org_a = str(uuid.uuid4())
-    org_b = str(uuid.uuid4())
+def test_search_does_not_return_another_orgs_memories(
+    client: TestClient, keys: InMemoryApiKeyStore
+) -> None:
+    org_a = uuid.uuid4()
+    org_b = uuid.uuid4()
+    key_a = generate_api_key()
+    key_b = generate_api_key()
+    keys.add(org_id=org_a, raw_key=key_a)
+    keys.add(org_id=org_b, raw_key=key_b)
     shared_content = "api keys are stored hashed"
     write_a = client.post(
         "/memories",
+        headers=_auth(key_a),
         json={
-            "org_id": org_a,
             "session_id": "s1",
             "memory_type": "procedural",
             "content": shared_content,
@@ -70,8 +98,8 @@ def test_search_does_not_return_another_orgs_memories(client: TestClient) -> Non
     )
     write_b = client.post(
         "/memories",
+        headers=_auth(key_b),
         json={
-            "org_id": org_b,
             "session_id": "s1",
             "memory_type": "procedural",
             "content": shared_content,
@@ -82,18 +110,19 @@ def test_search_does_not_return_another_orgs_memories(client: TestClient) -> Non
 
     search_a = client.get(
         "/memories/search",
-        params={"org_id": org_a, "q": shared_content, "session_id": "s1"},
+        headers=_auth(key_a),
+        params={"q": shared_content, "session_id": "s1"},
     )
     ids = {hit["id"] for hit in search_a.json()["memories"]}
     assert write_a.json()["id"] in ids
     assert write_b.json()["id"] not in ids
 
 
-def test_update_changes_content(client: TestClient, org_id: str) -> None:
+def test_update_changes_content(client: TestClient, raw_key: str) -> None:
     created = client.post(
         "/memories",
+        headers=_auth(raw_key),
         json={
-            "org_id": org_id,
             "session_id": "s1",
             "memory_type": "episodic",
             "content": "original note",
@@ -103,7 +132,7 @@ def test_update_changes_content(client: TestClient, org_id: str) -> None:
 
     updated = client.patch(
         f"/memories/{memory_id}",
-        params={"org_id": org_id},
+        headers=_auth(raw_key),
         json={"content": "corrected note", "importance": 0.4},
     )
     assert updated.status_code == 200
@@ -111,13 +140,17 @@ def test_update_changes_content(client: TestClient, org_id: str) -> None:
     assert updated.json()["importance"] == 0.4
 
 
-def test_update_is_scoped_to_org(client: TestClient) -> None:
-    owner = str(uuid.uuid4())
-    other = str(uuid.uuid4())
+def test_update_is_scoped_to_org(client: TestClient, keys: InMemoryApiKeyStore) -> None:
+    owner = uuid.uuid4()
+    other = uuid.uuid4()
+    owner_key = generate_api_key()
+    other_key = generate_api_key()
+    keys.add(org_id=owner, raw_key=owner_key)
+    keys.add(org_id=other, raw_key=other_key)
     created = client.post(
         "/memories",
+        headers=_auth(owner_key),
         json={
-            "org_id": owner,
             "session_id": "s1",
             "memory_type": "semantic",
             "content": "secret",
@@ -127,17 +160,17 @@ def test_update_is_scoped_to_org(client: TestClient) -> None:
 
     patched = client.patch(
         f"/memories/{memory_id}",
-        params={"org_id": other},
+        headers=_auth(other_key),
         json={"content": "stolen"},
     )
     assert patched.status_code == 404
 
 
-def test_delete_forgets_memory(client: TestClient, org_id: str) -> None:
+def test_delete_forgets_memory(client: TestClient, raw_key: str) -> None:
     created = client.post(
         "/memories",
+        headers=_auth(raw_key),
         json={
-            "org_id": org_id,
             "session_id": "s1",
             "memory_type": "semantic",
             "content": "forget me",
@@ -145,17 +178,18 @@ def test_delete_forgets_memory(client: TestClient, org_id: str) -> None:
     )
     memory_id = created.json()["id"]
 
-    deleted = client.delete(f"/memories/{memory_id}", params={"org_id": org_id})
+    deleted = client.delete(f"/memories/{memory_id}", headers=_auth(raw_key))
     assert deleted.status_code == 204
 
     search = client.get(
         "/memories/search",
-        params={"org_id": org_id, "q": "forget me", "session_id": "s1"},
+        headers=_auth(raw_key),
+        params={"q": "forget me", "session_id": "s1"},
     )
     assert search.json()["memories"] == []
 
 
-def test_write_requires_org_id(client: TestClient) -> None:
+def test_write_requires_api_key(client: TestClient) -> None:
     response = client.post(
         "/memories",
         json={
@@ -164,4 +198,4 @@ def test_write_requires_org_id(client: TestClient) -> None:
             "content": "no org",
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 401

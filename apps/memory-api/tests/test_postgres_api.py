@@ -8,9 +8,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from memory_api.db.models import Org
+from memory_api.db.models import ApiKey, Org, User
 from memory_api.db.session import SessionLocal, engine
 from memory_api.main import app
+from memory_api.services.api_keys import generate_api_key, hash_api_key, key_last4
 from memory_api.services.embedding import HashEmbedder, get_embedder
 
 
@@ -26,6 +27,35 @@ def _postgres_available() -> bool:
 pytestmark = pytest.mark.skipif(not _postgres_available(), reason="Postgres is not running")
 
 
+def _auth(raw_key: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {raw_key}"}
+
+
+def _issue_key(org: Org) -> str:
+    raw = generate_api_key()
+    user = User(
+        org_id=org.id,
+        google_id=f"google-{uuid.uuid4()}",
+        email=f"{org.id}@example.test",
+        name="test",
+        created_at=datetime.now(UTC),
+    )
+    api_key = ApiKey(
+        org_id=org.id,
+        created_by=user,
+        key_hash=hash_api_key(raw),
+        key_last4=key_last4(raw),
+        created_at=datetime.now(UTC),
+    )
+    session = SessionLocal()
+    try:
+        session.add_all([user, api_key])
+        session.commit()
+    finally:
+        session.close()
+    return raw
+
+
 @pytest.fixture
 def pg_client() -> TestClient:
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
@@ -33,27 +63,32 @@ def pg_client() -> TestClient:
         yield test_client
     app.dependency_overrides.clear()
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE memories, orgs CASCADE"))
+        connection.execute(text("TRUNCATE memories, api_keys, users, orgs CASCADE"))
 
 
 @pytest.fixture
-def org_id() -> str:
+def org_and_key() -> tuple[str, str]:
     org = Org(id=uuid.uuid4(), name="phase1-check", created_at=datetime.now(UTC))
     session = SessionLocal()
     try:
         session.add(org)
         session.commit()
-        return str(org.id)
+        session.refresh(org)
+        org_id = str(org.id)
     finally:
         session.close()
+    return org_id, _issue_key(org)
 
 
-def test_postgres_write_then_search_round_trip(pg_client: TestClient, org_id: str) -> None:
+def test_postgres_write_then_search_round_trip(
+    pg_client: TestClient, org_and_key: tuple[str, str]
+) -> None:
+    org_id, raw_key = org_and_key
     content = "pgvector recall should return the inserted memory"
     created = pg_client.post(
         "/memories",
+        headers=_auth(raw_key),
         json={
-            "org_id": org_id,
             "session_id": "phase1",
             "memory_type": "semantic",
             "content": content,
@@ -62,10 +97,12 @@ def test_postgres_write_then_search_round_trip(pg_client: TestClient, org_id: st
     )
     assert created.status_code == 201, created.text
     memory_id = created.json()["id"]
+    assert created.json()["org_id"] == org_id
 
     search = pg_client.get(
         "/memories/search",
-        params={"org_id": org_id, "q": content, "session_id": "phase1"},
+        headers=_auth(raw_key),
+        params={"q": content, "session_id": "phase1"},
     )
     assert search.status_code == 200, search.text
     hits = search.json()["memories"]
@@ -80,14 +117,17 @@ def test_postgres_search_isolates_tenants(pg_client: TestClient) -> None:
     org_b = Org(name="org-b", created_at=datetime.now(UTC))
     session.add_all([org_a, org_b])
     session.commit()
-    a_id, b_id = str(org_a.id), str(org_b.id)
+    session.refresh(org_a)
+    session.refresh(org_b)
     session.close()
+    key_a = _issue_key(org_a)
+    key_b = _issue_key(org_b)
 
     content = "hashed api keys live in postgres"
     write_a = pg_client.post(
         "/memories",
+        headers=_auth(key_a),
         json={
-            "org_id": a_id,
             "session_id": "s1",
             "memory_type": "procedural",
             "content": content,
@@ -95,8 +135,8 @@ def test_postgres_search_isolates_tenants(pg_client: TestClient) -> None:
     )
     write_b = pg_client.post(
         "/memories",
+        headers=_auth(key_b),
         json={
-            "org_id": b_id,
             "session_id": "s1",
             "memory_type": "procedural",
             "content": content,
@@ -107,18 +147,22 @@ def test_postgres_search_isolates_tenants(pg_client: TestClient) -> None:
 
     search_a = pg_client.get(
         "/memories/search",
-        params={"org_id": a_id, "q": content, "session_id": "s1"},
+        headers=_auth(key_a),
+        params={"q": content, "session_id": "s1"},
     )
     ids = {hit["id"] for hit in search_a.json()["memories"]}
     assert write_a.json()["id"] in ids
     assert write_b.json()["id"] not in ids
 
 
-def test_postgres_update_and_forget(pg_client: TestClient, org_id: str) -> None:
+def test_postgres_update_and_forget(
+    pg_client: TestClient, org_and_key: tuple[str, str]
+) -> None:
+    _, raw_key = org_and_key
     created = pg_client.post(
         "/memories",
+        headers=_auth(raw_key),
         json={
-            "org_id": org_id,
             "session_id": "s1",
             "memory_type": "episodic",
             "content": "original postgres note",
@@ -129,17 +173,18 @@ def test_postgres_update_and_forget(pg_client: TestClient, org_id: str) -> None:
 
     updated = pg_client.patch(
         f"/memories/{memory_id}",
-        params={"org_id": org_id},
+        headers=_auth(raw_key),
         json={"content": "corrected postgres note", "importance": 0.3},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["content"] == "corrected postgres note"
 
-    deleted = pg_client.delete(f"/memories/{memory_id}", params={"org_id": org_id})
+    deleted = pg_client.delete(f"/memories/{memory_id}", headers=_auth(raw_key))
     assert deleted.status_code == 204, deleted.text
 
     search = pg_client.get(
         "/memories/search",
-        params={"org_id": org_id, "q": "corrected postgres note", "session_id": "s1"},
+        headers=_auth(raw_key),
+        params={"q": "corrected postgres note", "session_id": "s1"},
     )
     assert search.json()["memories"] == []

@@ -10,7 +10,6 @@ from memory_api.db.models import MemoryType
 
 
 class MemoryCreate(BaseModel):
-    org_id: uuid.UUID
     session_id: str
     memory_type: MemoryType
     content: str

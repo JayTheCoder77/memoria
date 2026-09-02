@@ -38,7 +38,20 @@ cd apps/memory-api
 uv run pytest
 ```
 
-API tests expect Docker (they start a pgvector Postgres container).
+API tests skip Postgres cases if the database is not running.
+
+## MCP server
+
+```bash
+cd apps/memory-api
+uv run python -m memory_api.cli issue-key --org-name local
+
+cd apps/mcp-server
+uv sync
+MEMORY_API_URL=http://127.0.0.1:8000 uv run python -m mcp_server
+```
+
+Machine auth is a `mem_...` Bearer token. The MCP tools `remember`, `recall`, `update`, and `forget` require `org_id`, `session_id`, and `api_key` on every call.
 
 ## Specs
 
