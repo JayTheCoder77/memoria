@@ -51,6 +51,12 @@ def _handler(request: httpx.Request) -> httpx.Response:
         )
     if request.method == "DELETE":
         return httpx.Response(204, request=request)
+    if request.method == "POST" and request.url.path == "/events":
+        return httpx.Response(
+            202,
+            json={"status": "queued", "id": str(uuid.uuid4())},
+            request=request,
+        )
     return httpx.Response(404, request=request)
 
 
@@ -87,8 +93,16 @@ def test_recall_update_and_forget_call_expected_routes() -> None:
     client.recall(api_key="mem_testkey", session_id="s1", q="remember this")
     client.update(api_key="mem_testkey", memory_id=memory_id, content="updated")
     client.forget(api_key="mem_testkey", memory_id=memory_id)
+    emitted = client.emit(
+        api_key="mem_testkey",
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer pytest"},
+    )
+    assert emitted["status"] == "queued"
     assert seen == [
         ("GET", "/memories/search"),
         ("PATCH", f"/memories/{memory_id}"),
         ("DELETE", f"/memories/{memory_id}"),
+        ("POST", "/events"),
     ]

@@ -96,6 +96,24 @@ def forget(
     return {"status": "forgotten", "memory_id": memory_id}
 
 
+@mcp.tool()
+def emit(
+    org_id: str,
+    session_id: str,
+    api_key: str,
+    event_type: str,
+    payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Buffer a harness event for async extraction. Not every event becomes a memory."""
+    del org_id
+    return client.emit(
+        api_key=api_key,
+        session_id=session_id,
+        event_type=event_type,
+        payload=payload or {},
+    )
+
+
 def main() -> None:
     mcp.run()
 

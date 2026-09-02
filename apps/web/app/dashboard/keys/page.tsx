@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { authOptions } from "@/auth";
@@ -33,8 +34,10 @@ export default async function KeysPage() {
       <aside className="w-48 shrink-0 font-mono text-sm text-[#8B8B90]">
         <p className="text-[#F2F2F0]">Memoria</p>
         <nav className="mt-8 space-y-3">
-          <p>Memories</p>
-          <p className="text-[#00E08F]">API Keys</p>
+          <Link href="/dashboard/memories">Memories</Link>
+          <Link className="text-[#00E08F]" href="/dashboard/keys">
+            API Keys
+          </Link>
           <p>Settings</p>
         </nav>
       </aside>

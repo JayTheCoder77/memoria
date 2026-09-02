@@ -37,6 +37,7 @@ cd apps/memory-api
 uv sync
 uv run alembic upgrade head
 uv run uvicorn memory_api.main:app --reload --port 8000
+uv run python -m memory_api.worker   # optional: drain event_buffer
 ```
 
 From the repo root, `bun run dev` starts Turbo tasks for apps that define a `dev` script.
@@ -77,7 +78,7 @@ uv sync
 uv run python -m mcp_server
 ```
 
-Machine auth is a `mem_...` Bearer token. The MCP tools `remember`, `recall`, `update`, and `forget` require `org_id`, `session_id`, and `api_key` on every call.
+Machine auth is a `mem_...` Bearer token. The MCP tools `remember`, `recall`, `update`, `forget`, and `emit` require `org_id`, `session_id`, and `api_key` on every call. `emit` queues events for extraction; it does not always create a memory.
 
 ## Specs
 

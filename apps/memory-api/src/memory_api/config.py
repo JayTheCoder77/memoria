@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     rate_limit_per_minute: int = 120
     session_cookie_name: str = "memoria_session"
+    extractor: str = "heuristic"
+    extract_batch_size: int = 10
+    dedup_threshold: float = 0.92
+    consolidate_threshold: float = 0.85
 
 
 settings = Settings()

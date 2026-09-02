@@ -78,3 +78,31 @@ def test_google_auth_issues_session_and_allows_key_management(client: TestClient
     assert revoked.status_code == 204
     listed_after = client.get("/api-keys")
     assert listed_after.json()["keys"][0]["revoked_at"] is not None
+
+
+def test_session_can_list_memories_without_counting_recall(
+    client: TestClient, identities: InMemoryIdentityRepository
+) -> None:
+    from memory_api.db.models import MemoryType
+    from memory_api.db.repository import InMemoryMemoryRepository
+    from memory_api.main import app
+    from memory_api.services.embedding import HashEmbedder, embed_text
+
+    login = client.post("/auth/google", json={"id_token": "valid-google-token"})
+    assert login.status_code == 200
+    user = next(iter(identities._users_by_id.values()))
+    repo = InMemoryMemoryRepository()
+    repo.insert(
+        org_id=user.org_id,
+        session_id="s1",
+        memory_type=MemoryType.semantic,
+        content="We prefer pytest",
+        embedding=embed_text("We prefer pytest", embedder=HashEmbedder()),
+        importance=0.5,
+        source_metadata={},
+    )
+    app.dependency_overrides[get_repository] = lambda: repo
+    listed = client.get("/memories", params={"session_id": "s1", "memory_type": "semantic"})
+    assert listed.status_code == 200
+    assert listed.json()["memories"][0]["content"] == "We prefer pytest"
+    assert listed.json()["memories"][0]["access_count"] == 0

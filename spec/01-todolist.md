@@ -45,11 +45,11 @@
 - [x] End-to-end test: connect a harness to the MCP server locally, verify round trip
 
 ## Phase 3 — Intelligence
-- [ ] Event buffer/queue for incoming harness events (session messages, tool calls, diffs)
-- [ ] Batched extraction job (cheap/fast LLM pass, runs every N events or on session end)
-- [ ] Embedding-similarity dedup check before insert
-- [ ] Consolidation job (merge near-duplicate memories, promote recurring patterns)
-- [ ] Minimal dashboard page: list memories by org/session, filter by type
+- [x] Event buffer/queue for incoming harness events (session messages, tool calls, diffs)
+- [x] Batched extraction job (cheap/fast LLM pass, runs every N events or on session end)
+- [x] Embedding-similarity dedup check before insert
+- [x] Consolidation job (merge near-duplicate memories, promote recurring patterns)
+- [x] Minimal dashboard page: list memories by org/session, filter by type
 - [ ] Manual review flow for extracted memories (optional, if time allows)
 
 ## Phase 4 — Launch prep

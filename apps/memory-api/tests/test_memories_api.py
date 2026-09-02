@@ -199,3 +199,17 @@ def test_write_requires_api_key(client: TestClient) -> None:
         },
     )
     assert response.status_code == 401
+
+
+def test_duplicate_remember_reinforces_existing(client: TestClient, raw_key: str) -> None:
+    payload = {
+        "session_id": "s1",
+        "memory_type": "semantic",
+        "content": "We prefer pytest over unittest.",
+    }
+    first = client.post("/memories", headers=_auth(raw_key), json=payload)
+    second = client.post("/memories", headers=_auth(raw_key), json=payload)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+    assert second.json()["access_count"] == 1
