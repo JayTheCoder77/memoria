@@ -20,6 +20,18 @@ class UserOut(BaseModel):
     google_id: str
 
 
+class OrgOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+
+
+class MeOut(BaseModel):
+    user: UserOut
+    org: OrgOut
+
+
 class GoogleAuthResponse(BaseModel):
     token: str
     user: UserOut

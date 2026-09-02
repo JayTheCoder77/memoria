@@ -53,7 +53,7 @@
 - [ ] Manual review flow for extracted memories (optional, if time allows)
 
 ## Phase 4 — Launch prep
-- [ ] One-pager landing page (hero, how it works, quickstart, MCP config snippet)
-- [ ] Public docs: quickstart, MCP config example, API reference
+- [x] One-pager landing page (hero, how it works, quickstart, MCP config snippet)
+- [x] Public docs: quickstart, MCP config example, API reference
 - [ ] Deploy core service + MCP server (single environment is fine for MVP)
 - [ ] Record a short demo (connect Claude Code or Cursor to the MCP server live)

@@ -1,0 +1,15 @@
+:root {
+  --bg-base: #0a0a0b;
+  --bg-raised: #121214;
+  --bg-terminal: #000000;
+  --border-subtle: #232326;
+  --text-primary: #f2f2f0;
+  --text-secondary: #8b8b90;
+  --accent: #00e08f;
+  --accent-dim: rgb(0 224 143 / 0.15);
+  --danger: #ff5c5c;
+  --warning: #ffb020;
+  --type-episodic: #8b8b90;
+  --type-semantic: #7ee0c8;
+  --type-procedural: #ffb020;
+}

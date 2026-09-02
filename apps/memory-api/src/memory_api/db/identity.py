@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Protocol
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from memory_api.db.models import ApiKey, Org, User
 from memory_api.services.api_keys import generate_api_key, hash_api_key, key_last4
@@ -95,7 +95,9 @@ class PostgresIdentityRepository:
         return user
 
     def get_user(self, user_id: uuid.UUID) -> User | None:
-        return self._session.get(User, user_id)
+        return self._session.scalar(
+            select(User).options(joinedload(User.org)).where(User.id == user_id)
+        )
 
     def create_api_key(self, user: User) -> tuple[ApiKey, str]:
         raw = generate_api_key()
