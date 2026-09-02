@@ -12,6 +12,17 @@ class MemoryApiClient:
     def _headers(self, api_key: str) -> dict[str, str]:
         return {"Authorization": f"Bearer {api_key}"}
 
+    @staticmethod
+    def _raise_for_status(response: httpx.Response) -> None:
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            detail = exc.response.text
+            raise RuntimeError(
+                f"Memory API {exc.response.status_code} {exc.request.method} "
+                f"{exc.request.url.path}: {detail}"
+            ) from exc
+
     def remember(
         self,
         *,
@@ -33,7 +44,7 @@ class MemoryApiClient:
                 "source_metadata": source_metadata or {},
             },
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
 
     def recall(
@@ -49,7 +60,7 @@ class MemoryApiClient:
             headers=self._headers(api_key),
             params={"q": q, "session_id": session_id, "limit": limit},
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
 
     def update(
@@ -73,7 +84,7 @@ class MemoryApiClient:
             headers=self._headers(api_key),
             json=payload,
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()
 
     def forget(self, *, api_key: str, memory_id: str) -> None:
@@ -81,7 +92,7 @@ class MemoryApiClient:
             f"/memories/{memory_id}",
             headers=self._headers(api_key),
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
 
     def emit(
         self,
@@ -100,5 +111,5 @@ class MemoryApiClient:
                 "payload": payload or {},
             },
         )
-        response.raise_for_status()
+        self._raise_for_status(response)
         return response.json()

@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
+import { OpenRouterCard } from "@/components/features/dashboard/OpenRouterCard";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
 import { getMe } from "@/lib/api-client";
@@ -32,6 +33,11 @@ export default async function SettingsPage() {
             {me?.user.email ?? session.user?.email}
           </p>
         </Card>
+        <OpenRouterCard
+          status={
+            me?.openrouter ?? { configured: false, last4: null, model: null }
+          }
+        />
         <Card className="border-danger p-6">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-danger">
             Danger zone

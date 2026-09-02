@@ -59,7 +59,9 @@ Register an OAuth 2.0 Web client in Google Cloud Console (authorized redirect
 and the same client ID in `apps/memory-api/.env` as `MEMORIA_GOOGLE_CLIENT_ID`.
 
 `MEMORIA_EMBEDDER=minilm` switches the Memory API to in-process MiniLM
-(`uv sync --extra minilm` in `apps/memory-api`).
+(`uv sync --extra minilm` in `apps/memory-api`). Extraction uses each org’s
+OpenRouter key from dashboard Settings (BYOK). With no key, the worker uses
+the heuristic extractor.
 
 Recall latency:
 
@@ -78,7 +80,12 @@ uv sync
 uv run python -m mcp_server
 ```
 
-Machine auth is a `mem_...` Bearer token. The MCP tools `remember`, `recall`, `update`, `forget`, and `emit` require `org_id`, `session_id`, and `api_key` on every call. `emit` queues events for extraction; it does not always create a memory.
+Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
+`MEMORY_API_KEY` (OpenCode `environment`, Cursor `env`, or `apps/mcp-server/.env`).
+The tools `remember`, `recall`, `update`, `forget`, and `emit` do not take an API
+key. Org is implied by the key. Pass `session_id` per conversation, or set
+`MEMORY_SESSION_ID`. `emit` queues events for extraction; it does not always
+create a memory.
 
 ## Specs
 

@@ -51,19 +51,18 @@ export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
       body: (
         <>
           <p>
-            Memoria is a hosted memory layer behind a stateless MCP adapter. Paste the
-            config, create an API key, then call remember and recall from your harness.
+            Memoria is a hosted memory layer behind a stateless MCP adapter. Create an
+            API key in the dashboard, put it in the MCP server environment, then call
+            remember and recall from your harness. Do not put the key in prompts or AGENTS.md.
           </p>
           <h2 id="mcp">MCP config</h2>
-          <p>Drop this into Cursor or Claude Code. Replace the path and keep MEMORY_API_URL pointed at the API.</p>
+          <p>Drop this into Cursor or Claude Code. The mem_ key lives in MCP env, not in tool calls.</p>
           <CodeBlock code={mcpSnippet} language="json" />
           <h2 id="remember">First remember</h2>
           <CodeBlock
             language="python"
             code={`remember(
-  org_id="<org>",
   session_id="sess-1",
-  api_key="mem_...",
   content="We prefer pytest over unittest",
   memory_type="semantic",
 )`}
@@ -72,9 +71,7 @@ export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
           <CodeBlock
             language="python"
             code={`recall(
-  org_id="<org>",
   session_id="sess-1",
-  api_key="mem_...",
   q="what test runner do we use?",
 )`}
           />

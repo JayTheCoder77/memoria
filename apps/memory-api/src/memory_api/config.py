@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     rate_limit_per_minute: int = 120
     session_cookie_name: str = "memoria_session"
-    extractor: str = "heuristic"
+    llm_model: str = "openai/gpt-4o-mini"
+    llm_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_http_referer: str = "http://localhost:3000"
+    openrouter_app_title: str = "Memoria"
     extract_batch_size: int = 10
     dedup_threshold: float = 0.92
     consolidate_threshold: float = 0.85

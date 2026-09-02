@@ -20,9 +20,16 @@ export type MemoryRow = {
   source_metadata: Record<string, unknown>;
 };
 
+export type OpenRouterStatus = {
+  configured: boolean;
+  last4: string | null;
+  model: string | null;
+};
+
 export type MeResponse = {
   user: { id: string; org_id: string; email: string; name: string; google_id: string };
   org: { id: string; name: string };
+  openrouter: OpenRouterStatus;
 };
 
 async function apiFetch(path: string, token: string, init?: RequestInit) {
@@ -62,6 +69,21 @@ export async function getMe(token: string): Promise<MeResponse | null> {
   const response = await apiFetch("/auth/me", token);
   if (!response.ok) return null;
   return (await response.json()) as MeResponse;
+}
+
+export async function saveOpenRouterKey(
+  token: string,
+  body: { api_key?: string; model?: string },
+) {
+  const response = await apiFetch("/auth/openrouter", token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error("Could not save OpenRouter key");
+  }
+  return (await response.json()) as OpenRouterStatus;
 }
 
 export async function createApiKeyRequest(token: string) {

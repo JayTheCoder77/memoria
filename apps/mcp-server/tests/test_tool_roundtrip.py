@@ -4,13 +4,14 @@ import asyncio
 import uuid
 
 import httpx
+import pytest
 
 import mcp_server.server as server
 from mcp_server.client import MemoryApiClient
 from mcp_server.server import mcp
 
 
-def test_remember_and_recall_tools_round_trip() -> None:
+def test_remember_and_recall_tools_round_trip(monkeypatch: pytest.MonkeyPatch) -> None:
     created_id = str(uuid.uuid4())
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -59,14 +60,13 @@ def test_remember_and_recall_tools_round_trip() -> None:
     http = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://memory")
     original = server.client
     server.client = MemoryApiClient(http=http)
+    monkeypatch.setenv("MEMORY_API_KEY", "mem_test")
     try:
         remembered = asyncio.run(
             mcp.call_tool(
                 "remember",
                 {
-                    "org_id": str(uuid.uuid4()),
                     "session_id": "s1",
-                    "api_key": "mem_test",
                     "content": "round trip",
                 },
             )
@@ -75,9 +75,7 @@ def test_remember_and_recall_tools_round_trip() -> None:
             mcp.call_tool(
                 "recall",
                 {
-                    "org_id": str(uuid.uuid4()),
                     "session_id": "s1",
-                    "api_key": "mem_test",
                     "q": "round trip",
                 },
             )
