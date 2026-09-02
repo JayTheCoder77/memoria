@@ -80,6 +80,16 @@ def test_google_auth_issues_session_and_allows_key_management(client: TestClient
     assert listed_after.json()["keys"][0]["revoked_at"] is not None
 
 
+def test_auth_me_returns_user_and_org(client: TestClient) -> None:
+    login = client.post("/auth/google", json={"id_token": "valid-google-token"})
+    assert login.status_code == 200
+    me = client.get("/auth/me")
+    assert me.status_code == 200
+    body = me.json()
+    assert body["user"]["email"] == "jayant@example.com"
+    assert body["org"]["name"].endswith("'s org")
+
+
 def test_session_can_list_memories_without_counting_recall(
     client: TestClient, identities: InMemoryIdentityRepository
 ) -> None:

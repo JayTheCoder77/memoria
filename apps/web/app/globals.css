@@ -1,19 +1,69 @@
+@import "../styles/tokens.css";
 @import "tailwindcss";
 
-:root {
-  --background: #0a0a0b;
-  --foreground: #f2f2f0;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg-base: var(--bg-base);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-terminal: var(--bg-terminal);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-accent: var(--accent);
+  --color-accent-dim: var(--accent-dim);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-type-episodic: var(--type-episodic);
+  --color-type-semantic: var(--type-semantic);
+  --color-type-procedural: var(--type-procedural);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-base);
+  color: var(--text-primary);
   font-family: var(--font-geist-sans), sans-serif;
+}
+
+.dot-grid {
+  background-image: radial-gradient(circle, rgb(242 242 240 / 0.07) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.btn-cut {
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+}
+
+@keyframes ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  animation: ticker 36s linear infinite;
+}
+
+.cursor-blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.docs-body h2 {
+  margin-top: 2.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.docs-body p {
+  color: var(--text-secondary);
 }

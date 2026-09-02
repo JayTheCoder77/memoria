@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
+from memory_api.auth import get_session_user
 from memory_api.config import settings
 from memory_api.db.deps import get_google_verifier, get_identity_repository
 from memory_api.db.identity import IdentityRepository
-from memory_api.schemas.auth import GoogleAuthRequest, GoogleAuthResponse, UserOut
+from memory_api.db.models import User
+from memory_api.schemas.auth import GoogleAuthRequest, GoogleAuthResponse, MeOut, OrgOut, UserOut
 from memory_api.services.google_auth import GoogleTokenError, GoogleTokenVerifier
 from memory_api.services.session_tokens import issue_session_token
 
@@ -34,3 +36,9 @@ def google_auth(
         secure=False,
     )
     return GoogleAuthResponse(token=token, user=UserOut.model_validate(user))
+
+
+@router.get("/auth/me", response_model=MeOut)
+def me(user: User = Depends(get_session_user)) -> MeOut:
+    org = user.org
+    return MeOut(user=UserOut.model_validate(user), org=OrgOut.model_validate(org))
