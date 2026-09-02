@@ -6,12 +6,17 @@ requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.16",
     "fastapi>=0.116",
+    "google-auth>=2.40",
     "pgvector>=0.4",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.10",
+    "pyjwt>=2.10",
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.35",
 ]
+
+[project.optional-dependencies]
+minilm = ["sentence-transformers>=3.0"]
 
 [dependency-groups]
 dev = [
@@ -35,6 +40,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = [
     "ignore:Using `httpx` with `starlette.testclient`:DeprecationWarning",
+    "ignore:The HMAC key is:UserWarning",
 ]
 
 [tool.ruff]

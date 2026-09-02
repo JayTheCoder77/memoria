@@ -1,12 +1,28 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
 from mcp.server.mcpserver import MCPServer
 
 from mcp_server.client import MemoryApiClient
+
+
+def _load_dotenv() -> None:
+    path = Path(__file__).resolve().parents[2] / ".env"
+    if not path.exists():
+        return
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+
+
+_load_dotenv()
 
 mcp = MCPServer("memoria", version="0.1.0")
 _http = httpx.Client(base_url=os.environ.get("MEMORY_API_URL", "http://127.0.0.1:8000"))

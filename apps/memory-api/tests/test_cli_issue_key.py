@@ -36,4 +36,6 @@ def test_issue_api_key_is_hashed_and_authenticates() -> None:
     finally:
         session.close()
         with engine.begin() as connection:
-            connection.execute(text("TRUNCATE memories, api_keys, users, orgs CASCADE"))
+            connection.execute(
+                text("TRUNCATE memories, api_keys, users, event_buffer, orgs CASCADE")
+            )

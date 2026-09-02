@@ -1,3 +1,21 @@
-from memory_api.db.models import ApiKey, Base, Memory, MemoryType, Org, User
+from memory_api.db.models import (
+    ApiKey,
+    Base,
+    EventBuffer,
+    EventStatus,
+    Memory,
+    MemoryType,
+    Org,
+    User,
+)
 
-__all__ = ["ApiKey", "Base", "Memory", "MemoryType", "Org", "User"]
+__all__ = [
+    "ApiKey",
+    "Base",
+    "EventBuffer",
+    "EventStatus",
+    "Memory",
+    "MemoryType",
+    "Org",
+    "User",
+]

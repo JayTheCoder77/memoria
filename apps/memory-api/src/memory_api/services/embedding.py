@@ -12,7 +12,7 @@ class Embedder(Protocol):
 
 
 class HashEmbedder:
-    """Deterministic 384-d embedder used until the MiniLM model is wired in Phase 2."""
+    """Deterministic 384-d embedder used in tests and as the default local fallback."""
 
     def embed(self, text: str) -> list[float]:
         seed = text.encode("utf-8")
@@ -28,7 +28,27 @@ class HashEmbedder:
         return [value / norm for value in values]
 
 
+class MiniLMEmbedder:
+    """In-process all-MiniLM-L6-v2 embedder. Enable with MEMORIA_EMBEDDER=minilm."""
+
+    _model = None
+
+    def embed(self, text: str) -> list[float]:
+        from sentence_transformers import SentenceTransformer
+
+        if MiniLMEmbedder._model is None:
+            MiniLMEmbedder._model = SentenceTransformer(
+                "sentence-transformers/all-MiniLM-L6-v2"
+            )
+        vector = MiniLMEmbedder._model.encode(text, normalize_embeddings=True)
+        return vector.tolist()
+
+
 def get_embedder() -> Embedder:
+    from memory_api.config import settings
+
+    if settings.embedder == "minilm":
+        return MiniLMEmbedder()
     return HashEmbedder()
 
 

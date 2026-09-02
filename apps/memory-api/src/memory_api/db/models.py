@@ -99,3 +99,30 @@ class Memory(Base):
     )
 
     org: Mapped[Org] = relationship(back_populates="memories")
+
+
+class EventStatus(StrEnum):
+    pending = "pending"
+    processing = "processing"
+    processed = "processed"
+    failed = "failed"
+
+
+class EventBuffer(Base):
+    __tablename__ = "event_buffer"
+    __table_args__ = (Index("ix_event_buffer_status_created", "status", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
+    )
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    status: Mapped[EventStatus] = mapped_column(
+        Enum(EventStatus, name="event_status", native_enum=True),
+        nullable=False,
+        default=EventStatus.pending,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

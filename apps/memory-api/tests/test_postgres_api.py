@@ -63,7 +63,7 @@ def pg_client() -> TestClient:
         yield test_client
     app.dependency_overrides.clear()
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE memories, api_keys, users, orgs CASCADE"))
+        connection.execute(text("TRUNCATE memories, api_keys, users, event_buffer, orgs CASCADE"))
 
 
 @pytest.fixture
