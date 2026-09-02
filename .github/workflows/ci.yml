@@ -1,1 +1,21 @@
-# start ci
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  memory-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/memory-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
