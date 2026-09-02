@@ -5,6 +5,7 @@
     "dev": "uv run uvicorn memory_api.main:app --reload --host 0.0.0.0 --port 8000",
     "test": "uv run pytest",
     "lint": "uv run ruff check src tests",
-    "migrate": "uv run alembic upgrade head"
+    "migrate": "uv run alembic upgrade head",
+    "worker": "uv run python -m memory_api.worker"
   }
 }

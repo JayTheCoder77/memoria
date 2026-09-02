@@ -4,10 +4,12 @@ from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from memory_api.config import settings
+from memory_api.db.events import EventStore, PostgresEventStore
 from memory_api.db.identity import IdentityRepository, PostgresIdentityRepository
 from memory_api.db.repository import MemoryRepository, PostgresMemoryRepository
 from memory_api.db.session import get_db
 from memory_api.services.api_keys import ApiKeyStore, PostgresApiKeyStore
+from memory_api.services.extraction import Extractor, HeuristicExtractor
 from memory_api.services.google_auth import get_google_verifier
 from memory_api.services.rate_limit import SlidingWindowRateLimiter
 
@@ -16,6 +18,14 @@ _limiter: SlidingWindowRateLimiter | None = None
 
 def get_repository(db: Session = Depends(get_db)) -> Generator[MemoryRepository, None, None]:
     yield PostgresMemoryRepository(db)
+
+
+def get_event_store(db: Session = Depends(get_db)) -> EventStore:
+    return PostgresEventStore(db)
+
+
+def get_extractor() -> Extractor:
+    return HeuristicExtractor()
 
 
 def get_api_key_store(db: Session = Depends(get_db)) -> ApiKeyStore:
@@ -35,6 +45,8 @@ def get_rate_limiter() -> SlidingWindowRateLimiter:
 
 __all__ = [
     "get_api_key_store",
+    "get_event_store",
+    "get_extractor",
     "get_google_verifier",
     "get_identity_repository",
     "get_rate_limiter",

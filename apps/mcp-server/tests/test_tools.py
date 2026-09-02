@@ -9,7 +9,7 @@ def test_mcp_tools_are_registered() -> None:
     assert isinstance(mcp, MCPServer)
     tools = asyncio.run(mcp.list_tools())
     names = {tool.name for tool in tools}
-    assert names == {"remember", "recall", "update", "forget"}
+    assert names == {"remember", "recall", "update", "forget", "emit"}
     remember = next(tool for tool in tools if tool.name == "remember")
     required = set(remember.input_schema.get("required", []))
     assert {"org_id", "session_id", "api_key", "content"} <= required

@@ -32,6 +32,24 @@ class MemoryRepository(Protocol):
         limit: int = 10,
     ) -> list[tuple[Memory, float]]: ...
 
+    def similar(
+        self,
+        *,
+        org_id: uuid.UUID,
+        query_embedding: list[float],
+        session_id: str | None = None,
+        limit: int = 10,
+    ) -> list[tuple[Memory, float]]: ...
+
+    def list(
+        self,
+        *,
+        org_id: uuid.UUID,
+        session_id: str | None = None,
+        memory_type: MemoryType | None = None,
+        q: str | None = None,
+    ) -> list[Memory]: ...
+
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None: ...
 
     def delete(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> bool: ...
@@ -112,6 +130,42 @@ class PostgresMemoryRepository:
         self._session.flush()
         return results
 
+    def similar(
+        self,
+        *,
+        org_id: uuid.UUID,
+        query_embedding: list[float],
+        session_id: str | None = None,
+        limit: int = 10,
+    ) -> list[tuple[Memory, float]]:
+        rows = self._session.execute(
+            search_statement(
+                org_id=org_id,
+                query_embedding=query_embedding,
+                session_id=session_id,
+                limit=limit,
+            )
+        ).all()
+        return [(memory, 1.0 - float(dist)) for memory, dist in rows]
+
+    def list(
+        self,
+        *,
+        org_id: uuid.UUID,
+        session_id: str | None = None,
+        memory_type: MemoryType | None = None,
+        q: str | None = None,
+    ) -> list[Memory]:
+        stmt = select(Memory).where(Memory.org_id == org_id)
+        if session_id is not None:
+            stmt = stmt.where(Memory.session_id == session_id)
+        if memory_type is not None:
+            stmt = stmt.where(Memory.memory_type == memory_type)
+        if q:
+            stmt = stmt.where(Memory.content.ilike(f"%{q}%"))
+        stmt = stmt.order_by(Memory.created_at.desc())
+        return list(self._session.scalars(stmt))
+
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None:
         return self._session.scalar(
             select(Memory).where(Memory.id == memory_id, Memory.org_id == org_id)
@@ -177,6 +231,44 @@ class InMemoryMemoryRepository:
             score = 1.0 - _cosine_distance(memory.embedding, query_embedding)
             results.append((memory, score))
         return results
+
+    def similar(
+        self,
+        *,
+        org_id: uuid.UUID,
+        query_embedding: list[float],
+        session_id: str | None = None,
+        limit: int = 10,
+    ) -> list[tuple[Memory, float]]:
+        candidates = [row for row in self._rows if row.org_id == org_id]
+        if session_id is not None:
+            candidates = [row for row in candidates if row.session_id == session_id]
+        ranked = sorted(
+            candidates,
+            key=lambda row: _cosine_distance(row.embedding, query_embedding),
+        )[:limit]
+        return [
+            (memory, 1.0 - _cosine_distance(memory.embedding, query_embedding))
+            for memory in ranked
+        ]
+
+    def list(
+        self,
+        *,
+        org_id: uuid.UUID,
+        session_id: str | None = None,
+        memory_type: MemoryType | None = None,
+        q: str | None = None,
+    ) -> list[Memory]:
+        rows = [row for row in self._rows if row.org_id == org_id]
+        if session_id is not None:
+            rows = [row for row in rows if row.session_id == session_id]
+        if memory_type is not None:
+            rows = [row for row in rows if row.memory_type == memory_type]
+        if q:
+            needle = q.lower()
+            rows = [row for row in rows if needle in row.content.lower()]
+        return sorted(rows, key=lambda row: row.created_at, reverse=True)
 
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None:
         for row in self._rows:

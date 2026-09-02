@@ -5,13 +5,16 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from memory_api.auth import get_principal
+from memory_api.auth import get_principal, get_session_user
+from memory_api.config import settings
 from memory_api.db.deps import get_repository
-from memory_api.db.models import Memory
+from memory_api.db.models import Memory, MemoryType, User
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import MemoryCreate, MemoryOut, MemorySearchResponse, MemoryUpdate
 from memory_api.services.api_keys import Principal
+from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
+from memory_api.services.extraction import Candidate
 from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
 
 router = APIRouter()
@@ -30,15 +33,19 @@ def create_memory(
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
 ) -> MemoryOut:
-    embedding = embed_text(body.content, embedder=embedder)
-    memory = repo.insert(
-        org_id=principal.org_id,
-        session_id=body.session_id,
-        memory_type=body.memory_type,
+    candidate = Candidate(
         content=body.content,
-        embedding=embedding,
+        memory_type=body.memory_type,
         importance=body.importance,
         source_metadata=body.source_metadata,
+    )
+    memory, _inserted = persist_candidate(
+        repo=repo,
+        embedder=embedder,
+        org_id=principal.org_id,
+        session_id=body.session_id,
+        candidate=candidate,
+        threshold=settings.dedup_threshold,
     )
     return _to_out(memory)
 
@@ -81,6 +88,23 @@ def search(
         text_of=lambda item: item.content,
     )
     return MemorySearchResponse(memories=memories)
+
+
+@router.get("/memories", response_model=MemorySearchResponse)
+def list_memories(
+    session_id: str | None = None,
+    memory_type: MemoryType | None = None,
+    q: str | None = None,
+    user: User = Depends(get_session_user),
+    repo: MemoryRepository = Depends(get_repository),
+) -> MemorySearchResponse:
+    rows = repo.list(
+        org_id=user.org_id,
+        session_id=session_id,
+        memory_type=memory_type,
+        q=q,
+    )
+    return MemorySearchResponse(memories=[_to_out(memory) for memory in rows])
 
 
 @router.patch("/memories/{memory_id}", response_model=MemoryOut)

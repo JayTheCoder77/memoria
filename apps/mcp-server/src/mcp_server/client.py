@@ -82,3 +82,23 @@ class MemoryApiClient:
             headers=self._headers(api_key),
         )
         response.raise_for_status()
+
+    def emit(
+        self,
+        *,
+        api_key: str,
+        session_id: str,
+        event_type: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        response = self._http.post(
+            "/events",
+            headers=self._headers(api_key),
+            json={
+                "session_id": session_id,
+                "event_type": event_type,
+                "payload": payload or {},
+            },
+        )
+        response.raise_for_status()
+        return response.json()
