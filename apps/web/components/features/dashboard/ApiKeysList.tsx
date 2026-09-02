@@ -63,10 +63,8 @@ export function ApiKeysList({ keys }: { keys: ApiKeyRow[] }) {
           {keys.map((key) => (
             <tr className="border-t border-border-subtle" key={key.id}>
               <td className="py-3 font-mono">mem_...{key.key_last4}</td>
-              <td>{new Date(key.created_at).toLocaleDateString()}</td>
-              <td>
-                {key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : "—"}
-              </td>
+              <td>{key.created_at.slice(0, 10)}</td>
+              <td>{key.last_used_at?.slice(0, 10) ?? "—"}</td>
               <td>
                 {key.revoked_at ? (
                   <StatusPill status="revoked" />
