@@ -213,3 +213,19 @@ def test_duplicate_remember_reinforces_existing(client: TestClient, raw_key: str
     assert second.status_code == 201
     assert first.json()["id"] == second.json()["id"]
     assert second.json()["access_count"] == 1
+
+
+def test_remember_accepts_agent_memory_type_aliases(client: TestClient, raw_key: str) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "opencode-local",
+            "memory_type": "preference",
+            "content": "We prefer bun",
+            "importance": "0.7",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["memory_type"] == "semantic"
+    assert created.json()["importance"] == 0.7

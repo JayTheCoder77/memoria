@@ -23,6 +23,15 @@ class IdentityRepository(Protocol):
 
     def revoke_api_key(self, *, org_id: uuid.UUID, key_id: uuid.UUID) -> ApiKey | None: ...
 
+    def update_org_openrouter(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+        model: str | None,
+    ) -> Org: ...
+
 
 class InMemoryIdentityRepository:
     def __init__(self) -> None:
@@ -74,6 +83,19 @@ class InMemoryIdentityRepository:
                 return key
         return None
 
+    def update_org_openrouter(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+        model: str | None,
+    ) -> Org:
+        org.openrouter_key_ciphertext = ciphertext
+        org.openrouter_key_last4 = last4
+        org.openrouter_model = model
+        return org
+
 
 class PostgresIdentityRepository:
     def __init__(self, session: Session) -> None:
@@ -123,3 +145,17 @@ class PostgresIdentityRepository:
         key.revoked_at = datetime.now(UTC)
         self._session.flush()
         return key
+
+    def update_org_openrouter(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+        model: str | None,
+    ) -> Org:
+        org.openrouter_key_ciphertext = ciphertext
+        org.openrouter_key_last4 = last4
+        org.openrouter_model = model
+        self._session.flush()
+        return org

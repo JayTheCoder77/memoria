@@ -27,9 +27,21 @@ class OrgOut(BaseModel):
     name: str
 
 
+class OpenRouterOut(BaseModel):
+    configured: bool
+    last4: str | None = None
+    model: str | None = None
+
+
+class OpenRouterUpdate(BaseModel):
+    api_key: str | None = None
+    model: str | None = None
+
+
 class MeOut(BaseModel):
     user: UserOut
     org: OrgOut
+    openrouter: OpenRouterOut
 
 
 class GoogleAuthResponse(BaseModel):

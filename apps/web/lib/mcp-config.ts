@@ -4,7 +4,9 @@ export const mcpConfigSnippet = `{
       "command": "uv",
       "args": ["run", "--directory", "/path/to/memoria/apps/mcp-server", "python", "-m", "mcp_server"],
       "env": {
-        "MEMORY_API_URL": "http://127.0.0.1:8000"
+        "MEMORY_API_URL": "http://127.0.0.1:8000",
+        "MEMORY_API_KEY": "mem_...",
+        "MEMORY_SESSION_ID": "local"
       }
     }
   }

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+from uuid import UUID
+
 from memory_api.db.events import EventStore
 from memory_api.db.models import EventBuffer
 from memory_api.db.repository import MemoryRepository
@@ -16,6 +19,7 @@ def run_once(
     extractor: Extractor,
     batch_size: int,
     threshold: float = 0.92,
+    extractor_for_org: Callable[[UUID], Extractor] | None = None,
 ) -> int:
     claimed = events.claim_ready(batch_size)
     if not claimed:
@@ -26,11 +30,15 @@ def run_once(
         for row in claimed:
             grouped.setdefault((row.org_id, row.session_id), []).append(row)
         for batch in grouped.values():
+            org_id = batch[0].org_id
+            batch_extractor = (
+                extractor_for_org(org_id) if extractor_for_org is not None else extractor
+            )
             created += _process(
                 batch,
                 repo=repo,
                 embedder=embedder,
-                extractor=extractor,
+                extractor=batch_extractor,
                 threshold=threshold,
             )
     except Exception:

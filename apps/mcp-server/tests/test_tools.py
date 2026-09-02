@@ -12,4 +12,6 @@ def test_mcp_tools_are_registered() -> None:
     assert names == {"remember", "recall", "update", "forget", "emit"}
     remember = next(tool for tool in tools if tool.name == "remember")
     required = set(remember.input_schema.get("required", []))
-    assert {"org_id", "session_id", "api_key", "content"} <= required
+    assert "content" in required
+    assert "api_key" not in required
+    assert "org_id" not in required

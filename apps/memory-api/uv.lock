@@ -805,8 +805,10 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
+    { name = "cryptography" },
     { name = "fastapi" },
     { name = "google-auth" },
+    { name = "httpx" },
     { name = "pgvector" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
@@ -832,8 +834,10 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "alembic", specifier = ">=1.16" },
+    { name = "cryptography", specifier = ">=44.0" },
     { name = "fastapi", specifier = ">=0.116" },
     { name = "google-auth", specifier = ">=2.40" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "pgvector", specifier = ">=0.4" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic-settings", specifier = ">=2.10" },

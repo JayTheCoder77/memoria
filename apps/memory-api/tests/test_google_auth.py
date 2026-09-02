@@ -88,6 +88,30 @@ def test_auth_me_returns_user_and_org(client: TestClient) -> None:
     body = me.json()
     assert body["user"]["email"] == "jayant@example.com"
     assert body["org"]["name"].endswith("'s org")
+    assert body["openrouter"] == {"configured": False, "last4": None, "model": None}
+
+
+def test_openrouter_byok_stores_last4_not_raw_key(client: TestClient) -> None:
+    login = client.post("/auth/google", json={"id_token": "valid-google-token"})
+    assert login.status_code == 200
+    saved = client.put(
+        "/auth/openrouter",
+        json={"api_key": "sk-or-v1-super-secret-ab12", "model": "openai/gpt-4o-mini"},
+    )
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body["configured"] is True
+    assert body["last4"] == "ab12"
+    assert body["model"] == "openai/gpt-4o-mini"
+    assert "super-secret" not in saved.text
+
+    me = client.get("/auth/me")
+    assert me.json()["openrouter"]["configured"] is True
+    assert me.json()["openrouter"]["last4"] == "ab12"
+
+    cleared = client.put("/auth/openrouter", json={"api_key": ""})
+    assert cleared.status_code == 200
+    assert cleared.json()["configured"] is False
 
 
 def test_session_can_list_memories_without_counting_recall(
