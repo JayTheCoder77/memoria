@@ -79,7 +79,23 @@ uv sync
 uv run memoria-mcp
 ```
 
-Other users (no clone) with [uv](https://docs.astral.sh/uv/) installed:
+Other users (no clone): install [uv](https://docs.astral.sh/uv/) so `uvx` is on your PATH, then paste a snippet.
+
+macOS / Linux:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Restart the terminal (and Cursor / OpenCode) so `uvx` is found. Check with `uvx --version`. Create a `mem_...` key in the dashboard and put it in MCP env — not in prompts or AGENTS.md.
+
+Cursor / Claude Code (`mcp.json` / Claude MCP settings):
 
 ```json
 {
@@ -92,7 +108,33 @@ Other users (no clone) with [uv](https://docs.astral.sh/uv/) installed:
         "memoria-mcp"
       ],
       "env": {
-        "MEMORY_API_URL": "https://YOUR-API.onrender.com",
+        "MEMORY_API_URL": "https://memoria-api-jw5g.onrender.com",
+        "MEMORY_API_KEY": "mem_...",
+        "MEMORY_SESSION_ID": "local"
+      }
+    }
+  }
+}
+```
+
+OpenCode (`opencode.json` in the project, or `~/.config/opencode/opencode.json`):
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "memoria": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/JayTheCoder77/memoria.git#subdirectory=apps/mcp-server",
+        "memoria-mcp"
+      ],
+      "enabled": true,
+      "timeout": 60000,
+      "environment": {
+        "MEMORY_API_URL": "https://memoria-api-jw5g.onrender.com",
         "MEMORY_API_KEY": "mem_...",
         "MEMORY_SESSION_ID": "local"
       }
@@ -117,7 +159,7 @@ Pass `session_id` per conversation, or set `MEMORY_SESSION_ID`.
 
 - **Neon** — Postgres. Enable `vector` (Alembic does `CREATE EXTENSION IF NOT EXISTS vector`). Use the pooled connection string as `MEMORIA_DATABASE_URL` (or `DATABASE_URL`).
 - **Render** — Memory API. Blueprint: `render.yaml`. Free web service sleeps after idle; `MEMORIA_RUN_WORKER=true` runs extraction in-process (Render has no free background workers). Do not also run `python -m memory_api.worker` on the same instance.
-- **Vercel** — `apps/web`. Root directory `apps/web`. Set `MEMORY_API_URL` and `NEXT_PUBLIC_MEMORY_API_URL` to the Render URL, plus Google OAuth (`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
+- **Vercel** — `apps/web`. Root directory `apps/web`. Set `MEMORY_API_URL` and `NEXT_PUBLIC_MEMORY_API_URL` to `https://memoria-api-jw5g.onrender.com`, plus Google OAuth (`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
 - **Hugging Face** — token with Inference Providers access as `MEMORIA_HF_TOKEN` on Render.
 - **Google Cloud Console** — add `https://YOUR-WEB.vercel.app/api/auth/callback/google` and `http://localhost:3000/api/auth/callback/google`.
 - **MCP** — stays on the user’s machine via `uvx` as above. Not deployed.

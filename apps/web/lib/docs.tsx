@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
+import { Callout } from "@/components/ui/Callout";
 import { CodeBlock } from "@/components/ui/CodeBlock";
+import { mcpConfigSnippet, opencodeConfigSnippet } from "@/lib/mcp-config";
 
 export type DocsPage = {
   slug: string;
@@ -37,65 +39,131 @@ export const docsNav = [
   { section: "Reference", items: [{ href: "/docs/api", title: "API reference" }] },
 ];
 
-export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
+export function docsPages(): Record<string, DocsPage> {
+  const cursorSnippet = mcpConfigSnippet();
+  const opencodeSnippet = opencodeConfigSnippet();
+
   return {
     quickstart: {
       slug: "quickstart",
       title: "Quickstart",
       section: "Start",
       headings: [
-        { id: "mcp", label: "MCP config" },
-        { id: "remember", label: "First remember" },
-        { id: "recall", label: "First recall" },
-        { id: "emit", label: "Emit events" },
+        { id: "prereqs", label: "Prerequisites" },
+        { id: "key", label: "API key" },
+        { id: "cursor", label: "Cursor / Claude Code" },
+        { id: "opencode", label: "OpenCode" },
+        { id: "tools", label: "Tools" },
       ],
       body: (
         <>
           <p>
-            Memoria is a hosted memory layer behind a stateless MCP adapter. Create an
-            API key in the dashboard, put it in the MCP server environment, then call
-            remember and recall from your harness. Do not put the key in prompts or AGENTS.md.
+            Memoria is a hosted memory layer behind a stateless MCP adapter that runs on
+            your machine. The API lives at{" "}
+            <code>https://memoria-api-jw5g.onrender.com</code>. Create a key in the
+            dashboard, put it in MCP env, then call remember and recall from your harness.
           </p>
-          <h2 id="mcp">MCP config</h2>
+          <Callout>
+            Put the key in MCP environment variables. Do not paste it into prompts,
+            AGENTS.md, or chat.
+          </Callout>
+          <h2 id="prereqs">Prerequisites</h2>
           <p>
-            Drop this into Cursor, Claude Code, or OpenCode. Requires{" "}
-            <a href="https://docs.astral.sh/uv/">uv</a>. The mem_ key lives in MCP env,
-            not in tool calls. The adapter runs on your machine; the API is hosted.
+            You need <a href="https://docs.astral.sh/uv/">uv</a> so the harness can spawn{" "}
+            <code>uvx</code>. uv can fetch Python 3.12+ on first run. After installing,
+            restart the terminal and the harness so <code>uvx</code> is on PATH. Confirm
+            with <code>uvx --version</code>.
           </p>
-          <CodeBlock code={mcpSnippet} language="json" />
-          <h2 id="remember">First remember</h2>
+          <p>macOS / Linux:</p>
           <CodeBlock
-            language="python"
-            code={`remember(
-  session_id="sess-1",
-  content="We prefer pytest over unittest",
-  memory_type="semantic",
-)`}
+            language="bash"
+            code={`curl -LsSf https://astral.sh/uv/install.sh | sh`}
           />
-          <h2 id="recall">First recall</h2>
+          <p>Windows (PowerShell):</p>
           <CodeBlock
-            language="python"
-            code={`recall(
-  session_id="sess-1",
-  q="what test runner do we use?",
-)`}
+            language="powershell"
+            code={`powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`}
           />
-          <h2 id="emit">Emit events</h2>
+          <h2 id="key">API key</h2>
+          <ol className="list-decimal space-y-2 pl-5">
+            <li>Sign in to the dashboard with Google.</li>
+            <li>Open Keys and create a key. Copy the <code>mem_...</code> value once.</li>
+            <li>
+              Paste it as <code>MEMORY_API_KEY</code> in the snippet below. Replace{" "}
+              <code>mem_...</code> — do not leave the placeholder.
+            </li>
+          </ol>
           <p>
-            emit queues a harness signal (message, tool_call, diff, session_end). It is
-            not remember. Noisy tools are skipped. Durable text is extracted later by
-            the worker (heuristic, or your OpenRouter key). Send session_end to flush
-            a short session.
+            The first <code>uvx</code> start clones the MCP adapter from GitHub. That can
+            take a minute. Later starts are faster. Render may cold-start the API after
+            idle, so the first remember or recall can take a few seconds.
           </p>
-          <CodeBlock
-            language="python"
-            code={`emit(
-  session_id="sess-1",
-  event_type="message",
-  payload={"content": "We decided to use MiniLM for embeddings"},
-)
-emit(session_id="sess-1", event_type="session_end")`}
-          />
+          <h2 id="cursor">Cursor / Claude Code</h2>
+          <p>
+            Cursor: <code>~/.cursor/mcp.json</code> or project <code>.cursor/mcp.json</code>.
+            Claude Code: MCP settings / <code>.mcp.json</code>. The adapter runs locally;
+            it calls the hosted API.
+          </p>
+          <CodeBlock code={cursorSnippet} language="json" />
+          <h2 id="opencode">OpenCode</h2>
+          <p>
+            OpenCode does not use <code>mcpServers</code>. Put this in project{" "}
+            <code>opencode.json</code> / <code>opencode.jsonc</code>, or globally in{" "}
+            <code>~/.config/opencode/opencode.json</code>. Command is a single array. Env
+            is <code>environment</code>. Timeout is 60s so the first <code>uvx</code> fetch
+            is not killed.
+          </p>
+          <CodeBlock code={opencodeSnippet} language="json" />
+          <h2 id="tools">Tools</h2>
+          <p>
+            Five tools. Org comes from the API key. Pass <code>session_id</code> per
+            conversation, or set <code>MEMORY_SESSION_ID</code>. Tools never take a key.
+          </p>
+          <table className="w-full text-left text-sm">
+            <thead className="font-mono text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="pb-2 pr-4">Tool</th>
+                <th className="pb-2">Description</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-secondary">
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">remember</td>
+                <td className="py-3">
+                  Sync write. Deduped. Use when the agent (or you) knows this should
+                  persist. <code>memory_type</code> is episodic, semantic, or procedural.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">recall</td>
+                <td className="py-3">
+                  Sync search (similarity + recency + importance). Query with{" "}
+                  <code>q</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">update</td>
+                <td className="py-3">
+                  Patch an existing memory by <code>memory_id</code> (content, importance,
+                  or type).
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">forget</td>
+                <td className="py-3">Delete one memory by <code>memory_id</code>.</td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">emit</td>
+                <td className="py-3">
+                  Queue a harness event (<code>message</code>, <code>tool_call</code>,{" "}
+                  <code>diff</code>, <code>session_end</code>). Not every emit becomes a
+                  memory. Noisy tools are skipped. The worker extracts later (heuristic,
+                  or your OpenRouter key). Send <code>session_end</code> to flush a short
+                  session.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </>
       ),
     },
@@ -157,15 +225,20 @@ emit(session_id="sess-1", event_type="session_end")`}
       body: (
         <>
           <p>
-            MVP is self-host first: Docker Postgres, Memory API, MCP server, Next.js
-            dashboard. Hosted is the same binary, different DATABASE_URL.
+            Hosted is the default for MCP users. Self-host is the same API and MCP
+            contract with your own Postgres.
           </p>
           <h2 id="local">Local MVP</h2>
-          <p>docker compose up, alembic upgrade, uvicorn, next dev. See the repo README.</p>
+          <p>
+            docker compose up, alembic upgrade, uvicorn, next dev. Point{" "}
+            <code>MEMORY_API_URL</code> at <code>http://127.0.0.1:8000</code>. See the
+            repo README.
+          </p>
           <h2 id="hosted">Hosted</h2>
           <p>
-            Same API and MCP contract. You still generate org-scoped keys. Nothing in
-            the protocol assumes localhost.
+            Memory API: <code>https://memoria-api-jw5g.onrender.com</code>. MCP still
+            runs on your machine via <code>uvx</code>. Dashboard keys are org-scoped.
+            Free Render sleeps after idle — the first request after a gap can be slow.
           </p>
         </>
       ),

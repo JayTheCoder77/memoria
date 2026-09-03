@@ -64,6 +64,23 @@ body {
   font-weight: 600;
 }
 
-.docs-body p {
+.docs-body p,
+.docs-body ol,
+.docs-body li {
   color: var(--text-secondary);
+}
+
+.docs-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.docs-body code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.85em;
+}
+
+.docs-body table {
+  border-collapse: collapse;
 }
