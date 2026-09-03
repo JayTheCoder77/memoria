@@ -7,7 +7,7 @@ import { SectionLabel } from "@/components/ui/SectionLabel";
 const faqs = [
   {
     q: "Is this hosted or self-hosted?",
-    a: "Both. The Memory API and MCP server run locally via Docker today. A hosted environment is the launch target; self-host remains first-class.",
+    a: "Hosted by default: API on Render, dashboard on Vercel. Self-host remains first-class (Docker Postgres + local API). MCP always runs on your machine.",
   },
   {
     q: "What does it cost?",
@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "Which harnesses work?",
-    a: "Any MCP client. We document Cursor and Claude Code first. LangGraph and custom agents use the same tools.",
+    a: "Any MCP client. Docs cover Cursor, Claude Code, and OpenCode. LangGraph and custom agents use the same tools.",
   },
   {
     q: "How is data isolated?",

@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 
 import { docsPages } from "@/lib/docs";
-import { mcpConfigSnippet } from "@/lib/mcp-config";
 
 export default async function DocsPage({
   params,
@@ -10,7 +9,7 @@ export default async function DocsPage({
 }) {
   const { slug } = await params;
   const key = slug?.[0] ?? "quickstart";
-  const pages = docsPages(mcpConfigSnippet());
+  const pages = docsPages();
   const page = pages[key];
   if (!page) {
     notFound();
