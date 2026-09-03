@@ -26,7 +26,7 @@ def test_issue_api_key_is_hashed_and_authenticates() -> None:
     session = SessionLocal()
     try:
         org, raw = issue_api_key(session, org_name="cli-org")
-        stored = session.scalar(select(ApiKey))
+        stored = session.scalar(select(ApiKey).where(ApiKey.org_id == org.id))
         assert stored is not None
         assert stored.key_hash == hash_api_key(raw)
         assert stored.org_id == org.id

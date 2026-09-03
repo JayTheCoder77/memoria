@@ -58,10 +58,10 @@ Register an OAuth 2.0 Web client in Google Cloud Console (authorized redirect
 `apps/web/.env.local` (`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXTAUTH_SECRET`)
 and the same client ID in `apps/memory-api/.env` as `MEMORIA_GOOGLE_CLIENT_ID`.
 
-`MEMORIA_EMBEDDER=minilm` switches the Memory API to in-process MiniLM
-(`uv sync --extra minilm` in `apps/memory-api`). Extraction uses each org’s
-OpenRouter key from dashboard Settings (BYOK). With no key, the worker uses
-the heuristic extractor.
+`MEMORIA_EMBEDDER=hf` uses Hugging Face Inference for MiniLM (needs `MEMORIA_HF_TOKEN`).
+`MEMORIA_EMBEDDER=minilm` runs MiniLM in-process (`uv sync --extra minilm`). Do not mix
+embedders on one database. Extraction uses each org’s OpenRouter key from dashboard
+Settings (BYOK). With no key, the worker uses the heuristic extractor.
 
 Recall latency:
 
@@ -71,21 +71,58 @@ uv run python scripts/bench_recall.py --api-key mem_... --n 50
 
 ## MCP server
 
-```bash
-cd apps/memory-api
-uv run python -m memory_api.cli issue-key --org-name local
+Local checkout:
 
+```bash
 cd apps/mcp-server
 uv sync
-uv run python -m mcp_server
+uv run memoria-mcp
+```
+
+Other users (no clone) with [uv](https://docs.astral.sh/uv/) installed:
+
+```json
+{
+  "mcpServers": {
+    "memoria": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/JayTheCoder77/memoria.git#subdirectory=apps/mcp-server",
+        "memoria-mcp"
+      ],
+      "env": {
+        "MEMORY_API_URL": "https://YOUR-API.onrender.com",
+        "MEMORY_API_KEY": "mem_...",
+        "MEMORY_SESSION_ID": "local"
+      }
+    }
+  }
+}
 ```
 
 Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
-`MEMORY_API_KEY` (OpenCode `environment`, Cursor `env`, or `apps/mcp-server/.env`).
-The tools `remember`, `recall`, `update`, `forget`, and `emit` do not take an API
-key. Org is implied by the key. Pass `session_id` per conversation, or set
-`MEMORY_SESSION_ID`. `emit` queues events for extraction; it does not always
-create a memory.
+`MEMORY_API_KEY`. Tools do not take an API key. Org is implied by the key.
+
+| Tool | What it does |
+|---|---|
+| `remember` | Sync write. Deduped. Use when the agent (or you) knows this should persist. |
+| `recall` | Sync search (similarity + recency + importance). |
+| `update` / `forget` | Patch or delete one memory. |
+| `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later. Send `session_end` to flush a short session. |
+
+Pass `session_id` per conversation, or set `MEMORY_SESSION_ID`.
+
+## Hosted deploy (free-tier)
+
+- **Neon** — Postgres. Enable `vector` (Alembic does `CREATE EXTENSION IF NOT EXISTS vector`). Use the pooled connection string as `MEMORIA_DATABASE_URL` (or `DATABASE_URL`).
+- **Render** — Memory API. Blueprint: `render.yaml`. Free web service sleeps after idle; `MEMORIA_RUN_WORKER=true` runs extraction in-process (Render has no free background workers). Do not also run `python -m memory_api.worker` on the same instance.
+- **Vercel** — `apps/web`. Root directory `apps/web`. Set `MEMORY_API_URL` and `NEXT_PUBLIC_MEMORY_API_URL` to the Render URL, plus Google OAuth (`AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `NEXTAUTH_SECRET`, `NEXTAUTH_URL`).
+- **Hugging Face** — token with Inference Providers access as `MEMORIA_HF_TOKEN` on Render.
+- **Google Cloud Console** — add `https://YOUR-WEB.vercel.app/api/auth/callback/google` and `http://localhost:3000/api/auth/callback/google`.
+- **MCP** — stays on the user’s machine via `uvx` as above. Not deployed.
+
+Set `MEMORIA_CORS_ORIGINS` to the Vercel origin if the browser ever calls the API directly. Dashboard calls are server-side and do not need CORS.
 
 ## Specs
 

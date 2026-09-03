@@ -10,7 +10,7 @@ export default async function DocsPage({
 }) {
   const { slug } = await params;
   const key = slug?.[0] ?? "quickstart";
-  const pages = docsPages(mcpConfigSnippet);
+  const pages = docsPages(mcpConfigSnippet());
   const page = pages[key];
   if (!page) {
     notFound();

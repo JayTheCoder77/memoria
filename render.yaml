@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: memoria-api
+    runtime: docker
+    plan: free
+    dockerfilePath: apps/memory-api/Dockerfile
+    dockerContext: apps/memory-api
+    healthCheckPath: /health
+    envVars:
+      - key: MEMORIA_EMBEDDER
+        value: hf
+      - key: MEMORIA_RUN_WORKER
+        value: "true"
+      - key: MEMORIA_HF_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2
+      - key: MEMORIA_DATABASE_URL
+        sync: false
+      - key: MEMORIA_JWT_SECRET
+        generateValue: true
+      - key: MEMORIA_GOOGLE_CLIENT_ID
+        sync: false
+      - key: MEMORIA_HF_TOKEN
+        sync: false
+      - key: MEMORIA_CORS_ORIGINS
+        sync: false
+      - key: MEMORIA_OPENROUTER_HTTP_REFERER
+        sync: false
+      - key: MEMORIA_OPENROUTER_APP_TITLE
+        value: Memoria

@@ -47,6 +47,7 @@ export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
         { id: "mcp", label: "MCP config" },
         { id: "remember", label: "First remember" },
         { id: "recall", label: "First recall" },
+        { id: "emit", label: "Emit events" },
       ],
       body: (
         <>
@@ -56,7 +57,11 @@ export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
             remember and recall from your harness. Do not put the key in prompts or AGENTS.md.
           </p>
           <h2 id="mcp">MCP config</h2>
-          <p>Drop this into Cursor or Claude Code. The mem_ key lives in MCP env, not in tool calls.</p>
+          <p>
+            Drop this into Cursor, Claude Code, or OpenCode. Requires{" "}
+            <a href="https://docs.astral.sh/uv/">uv</a>. The mem_ key lives in MCP env,
+            not in tool calls. The adapter runs on your machine; the API is hosted.
+          </p>
           <CodeBlock code={mcpSnippet} language="json" />
           <h2 id="remember">First remember</h2>
           <CodeBlock
@@ -74,6 +79,22 @@ export function docsPages(mcpSnippet: string): Record<string, DocsPage> {
   session_id="sess-1",
   q="what test runner do we use?",
 )`}
+          />
+          <h2 id="emit">Emit events</h2>
+          <p>
+            emit queues a harness signal (message, tool_call, diff, session_end). It is
+            not remember. Noisy tools are skipped. Durable text is extracted later by
+            the worker (heuristic, or your OpenRouter key). Send session_end to flush
+            a short session.
+          </p>
+          <CodeBlock
+            language="python"
+            code={`emit(
+  session_id="sess-1",
+  event_type="message",
+  payload={"content": "We decided to use MiniLM for embeddings"},
+)
+emit(session_id="sess-1", event_type="session_end")`}
           />
         </>
       ),
