@@ -51,14 +51,17 @@ class MemoryApiClient:
         self,
         *,
         api_key: str,
-        session_id: str,
         q: str,
+        session_id: str | None = None,
         limit: int = 10,
     ) -> dict[str, Any]:
+        params: dict[str, Any] = {"q": q, "limit": limit}
+        if session_id:
+            params["session_id"] = session_id
         response = self._http.get(
             "/memories/search",
             headers=self._headers(api_key),
-            params={"q": q, "session_id": session_id, "limit": limit},
+            params=params,
         )
         self._raise_for_status(response)
         return response.json()

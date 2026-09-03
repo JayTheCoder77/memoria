@@ -19,8 +19,7 @@ export function mcpConfigSnippet(apiUrl = memoryApiUrl()): string {
       ],
       "env": {
         "MEMORY_API_URL": "${apiUrl}",
-        "MEMORY_API_KEY": "mem_...",
-        "MEMORY_SESSION_ID": "local"
+        "MEMORY_API_KEY": "mem_..."
       }
     }
   }
@@ -43,8 +42,7 @@ export function opencodeConfigSnippet(apiUrl = memoryApiUrl()): string {
       "timeout": 60000,
       "environment": {
         "MEMORY_API_URL": "${apiUrl}",
-        "MEMORY_API_KEY": "mem_...",
-        "MEMORY_SESSION_ID": "local"
+        "MEMORY_API_KEY": "mem_..."
       }
     }
   }

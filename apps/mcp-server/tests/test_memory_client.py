@@ -81,16 +81,19 @@ def test_remember_posts_to_memory_api() -> None:
 
 
 def test_recall_update_and_forget_call_expected_routes() -> None:
-    seen: list[tuple[str, str]] = []
+    seen: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        seen.append((request.method, request.url.path))
+        seen.append(request)
         return _handler(request)
 
     http = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://memory")
     client = MemoryApiClient(http=http)
     memory_id = str(uuid.uuid4())
+    client.recall(api_key="mem_testkey", q="org wide")
+    assert "session_id" not in seen[0].url.params
     client.recall(api_key="mem_testkey", session_id="s1", q="remember this")
+    assert seen[1].url.params["session_id"] == "s1"
     client.update(api_key="mem_testkey", memory_id=memory_id, content="updated")
     client.forget(api_key="mem_testkey", memory_id=memory_id)
     emitted = client.emit(
@@ -100,7 +103,8 @@ def test_recall_update_and_forget_call_expected_routes() -> None:
         payload={"content": "We prefer pytest"},
     )
     assert emitted["status"] == "queued"
-    assert seen == [
+    assert [(item.method, item.url.path) for item in seen] == [
+        ("GET", "/memories/search"),
         ("GET", "/memories/search"),
         ("PATCH", f"/memories/{memory_id}"),
         ("DELETE", f"/memories/{memory_id}"),

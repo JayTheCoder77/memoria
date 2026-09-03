@@ -109,8 +109,7 @@ Cursor / Claude Code (`mcp.json` / Claude MCP settings):
       ],
       "env": {
         "MEMORY_API_URL": "https://memoria-api-jw5g.onrender.com",
-        "MEMORY_API_KEY": "mem_...",
-        "MEMORY_SESSION_ID": "local"
+        "MEMORY_API_KEY": "mem_..."
       }
     }
   }
@@ -135,8 +134,7 @@ OpenCode (`opencode.json` in the project, or `~/.config/opencode/opencode.json`)
       "timeout": 60000,
       "environment": {
         "MEMORY_API_URL": "https://memoria-api-jw5g.onrender.com",
-        "MEMORY_API_KEY": "mem_...",
-        "MEMORY_SESSION_ID": "local"
+        "MEMORY_API_KEY": "mem_..."
       }
     }
   }
@@ -151,9 +149,9 @@ Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
 | `remember` | Sync write. Deduped. Use when the agent (or you) knows this should persist. |
 | `recall` | Sync search (similarity + recency + importance). |
 | `update` / `forget` | Patch or delete one memory. |
-| `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later. Send `session_end` to flush a short session. |
+| `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later. Send `session_end` to flush a short session and start a new write session. |
 
-Pass `session_id` per conversation, or set `MEMORY_SESSION_ID`.
+Do not set `MEMORY_SESSION_ID` in MCP JSON. Writes get an auto session id for the harness process; it rotates after `session_end`. `recall` searches the whole org unless you pass `session_id`. Delete `MEMORY_SESSION_ID` from existing configs if it is still `local`.
 
 ## Hosted deploy (free-tier)
 
