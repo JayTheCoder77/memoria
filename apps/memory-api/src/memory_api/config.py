@@ -10,6 +10,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+psycopg://memoria:memoria@localhost:5432/memoria"
     embedder: str = "hash"
+    hf_token: str = ""
+    hf_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    run_worker: bool = False
+    cors_origins: str = ""
     jwt_secret: str = "dev-secret-change-me-please-use-32b+"
     jwt_ttl_minutes: int = 60 * 24
     google_client_id: str = ""
