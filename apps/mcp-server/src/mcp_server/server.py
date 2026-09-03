@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -39,11 +40,43 @@ def _api_key() -> str:
     return key
 
 
-def _session(session_id: str | None) -> str:
-    value = (session_id or os.environ.get("MEMORY_SESSION_ID") or "").strip()
-    if not value:
-        raise RuntimeError("session_id is required (tool argument or MEMORY_SESSION_ID).")
-    return value
+_auto_session: str | None = None
+
+
+def reset_auto_session() -> None:
+    global _auto_session
+    _auto_session = None
+
+
+def _pinned_session() -> str:
+    return os.environ.get("MEMORY_SESSION_ID", "").strip()
+
+
+def _write_session(session_id: str | None) -> str:
+    explicit = (session_id or "").strip()
+    if explicit:
+        return explicit
+    pinned = _pinned_session()
+    if pinned:
+        return pinned
+    global _auto_session
+    if _auto_session is None:
+        _auto_session = str(uuid.uuid4())
+    return _auto_session
+
+
+def _recall_session(session_id: str | None) -> str | None:
+    explicit = (session_id or "").strip()
+    if explicit:
+        return explicit
+    return _pinned_session() or None
+
+
+def _rotate_auto_session(*, used_explicit: bool) -> None:
+    if used_explicit or _pinned_session():
+        return
+    global _auto_session
+    _auto_session = str(uuid.uuid4())
 
 
 @mcp.tool()
@@ -53,10 +86,14 @@ def remember(
     memory_type: str = "semantic",
     importance: float = 0.5,
 ) -> dict[str, Any]:
-    """Store a durable memory. memory_type is episodic, semantic, or procedural."""
+    """Store a durable memory. memory_type is episodic, semantic, or procedural.
+
+    Omit session_id. The adapter assigns one for this harness process and
+    rotates it after emit(session_end). Do not put a session id in MCP JSON.
+    """
     return client.remember(
         api_key=_api_key(),
-        session_id=_session(session_id),
+        session_id=_write_session(session_id),
         memory_type=memory_type,
         content=content,
         importance=importance,
@@ -69,10 +106,13 @@ def recall(
     session_id: str | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
-    """Search memories by semantic similarity."""
+    """Search memories by semantic similarity across the org.
+
+    Omit session_id unless you need to filter one conversation.
+    """
     return client.recall(
         api_key=_api_key(),
-        session_id=_session(session_id),
+        session_id=_recall_session(session_id),
         q=q,
         limit=limit,
     )
@@ -108,13 +148,23 @@ def emit(
     payload: dict[str, Any] | None = None,
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Buffer a harness event for async extraction. Not every event becomes a memory."""
-    return client.emit(
+    """Buffer a harness event for async extraction. Not every event becomes a memory.
+
+    event_type must be message, tool_call, diff, or session_end. payload is an
+    object (use content for text). Omit session_id. session_end flushes the
+    worker batch and starts a new auto session id.
+    """
+    used_explicit = bool((session_id or "").strip())
+    sid = _write_session(session_id)
+    result = client.emit(
         api_key=_api_key(),
-        session_id=_session(session_id),
+        session_id=sid,
         event_type=event_type,
         payload=payload or {},
     )
+    if event_type == "session_end":
+        _rotate_auto_session(used_explicit=used_explicit)
+    return result
 
 
 def main() -> None:

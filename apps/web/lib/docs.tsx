@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Callout } from "@/components/ui/Callout";
 import { CodeBlock } from "@/components/ui/CodeBlock";
-import { mcpConfigSnippet, opencodeConfigSnippet } from "@/lib/mcp-config";
+import { hostedMemoryApiUrl, mcpConfigSnippet, opencodeConfigSnippet } from "@/lib/mcp-config";
 
 export type DocsPage = {
   slug: string;
@@ -40,8 +40,8 @@ export const docsNav = [
 ];
 
 export function docsPages(): Record<string, DocsPage> {
-  const cursorSnippet = mcpConfigSnippet();
-  const opencodeSnippet = opencodeConfigSnippet();
+  const cursorSnippet = mcpConfigSnippet(hostedMemoryApiUrl);
+  const opencodeSnippet = opencodeConfigSnippet(hostedMemoryApiUrl);
 
   return {
     quickstart: {
@@ -53,15 +53,17 @@ export function docsPages(): Record<string, DocsPage> {
         { id: "key", label: "API key" },
         { id: "cursor", label: "Cursor / Claude Code" },
         { id: "opencode", label: "OpenCode" },
+        { id: "scope", label: "Org vs session" },
         { id: "tools", label: "Tools" },
       ],
       body: (
         <>
           <p>
             Memoria is a hosted memory layer behind a stateless MCP adapter that runs on
-            your machine. The API lives at{" "}
-            <code>https://memoria-api-jw5g.onrender.com</code>. Create a key in the
-            dashboard, put it in MCP env, then call remember and recall from your harness.
+            your machine. Set <code>MEMORY_API_URL</code> to{" "}
+            <code>{hostedMemoryApiUrl}</code>. Create a key in the dashboard, put it in
+            MCP env as <code>MEMORY_API_KEY</code>, then call remember and recall from
+            your harness.
           </p>
           <Callout>
             Put the key in MCP environment variables. Do not paste it into prompts,
@@ -89,8 +91,10 @@ export function docsPages(): Record<string, DocsPage> {
             <li>Sign in to the dashboard with Google.</li>
             <li>Open Keys and create a key. Copy the <code>mem_...</code> value once.</li>
             <li>
-              Paste it as <code>MEMORY_API_KEY</code> in the snippet below. Replace{" "}
-              <code>mem_...</code> — do not leave the placeholder.
+              In MCP env set <code>MEMORY_API_URL</code> to{" "}
+              <code>{hostedMemoryApiUrl}</code> and paste the key as{" "}
+              <code>MEMORY_API_KEY</code>. Replace <code>mem_...</code> — do not leave
+              the placeholder. Do not set <code>MEMORY_SESSION_ID</code>.
             </li>
           </ol>
           <p>
@@ -101,8 +105,9 @@ export function docsPages(): Record<string, DocsPage> {
           <h2 id="cursor">Cursor / Claude Code</h2>
           <p>
             Cursor: <code>~/.cursor/mcp.json</code> or project <code>.cursor/mcp.json</code>.
-            Claude Code: MCP settings / <code>.mcp.json</code>. The adapter runs locally;
-            it calls the hosted API.
+            Claude Code: MCP settings / <code>.mcp.json</code>. The adapter runs locally.
+            Env must include <code>MEMORY_API_URL</code> ={" "}
+            <code>{hostedMemoryApiUrl}</code> and <code>MEMORY_API_KEY</code>.
           </p>
           <CodeBlock code={cursorSnippet} language="json" />
           <h2 id="opencode">OpenCode</h2>
@@ -110,14 +115,54 @@ export function docsPages(): Record<string, DocsPage> {
             OpenCode does not use <code>mcpServers</code>. Put this in project{" "}
             <code>opencode.json</code> / <code>opencode.jsonc</code>, or globally in{" "}
             <code>~/.config/opencode/opencode.json</code>. Command is a single array. Env
-            is <code>environment</code>. Timeout is 60s so the first <code>uvx</code> fetch
-            is not killed.
+            is <code>environment</code> with <code>MEMORY_API_URL</code> ={" "}
+            <code>{hostedMemoryApiUrl}</code> and <code>MEMORY_API_KEY</code>. Timeout is
+            60s so the first <code>uvx</code> fetch is not killed.
           </p>
           <CodeBlock code={opencodeSnippet} language="json" />
+          <h2 id="scope">Org vs session</h2>
+          <p>
+            Tenancy is the org on your API key. Session is a label on writes, not a
+            second tenant. Do not put a session id in MCP JSON. Clients do not update
+            that file when you start a new chat.
+          </p>
+          <table className="w-full text-left text-sm">
+            <thead className="font-mono text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="pb-2 pr-4">Scope</th>
+                <th className="pb-2">How tools use it</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-secondary">
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">Org-wide</td>
+                <td className="py-3">
+                  Implied by <code>MEMORY_API_KEY</code>. Default <code>recall</code>{" "}
+                  searches every memory in that org (any session). <code>update</code> and{" "}
+                  <code>forget</code> target one row by <code>memory_id</code> inside the
+                  org. Memories never cross orgs.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">Session-wide</td>
+                <td className="py-3">
+                  <code>remember</code> and <code>emit</code> tag writes with an auto
+                  session id for this harness process. <code>emit(session_end)</code>{" "}
+                  flushes extraction and starts a new id. Pass <code>session_id</code> on{" "}
+                  <code>recall</code> only when you want that conversation, not the whole
+                  org. Optional <code>session_id</code> on write pins a label; omit it
+                  otherwise.
+                </td>
+              </tr>
+            </tbody>
+          </table>
           <h2 id="tools">Tools</h2>
           <p>
-            Five tools. Org comes from the API key. Pass <code>session_id</code> per
-            conversation, or set <code>MEMORY_SESSION_ID</code>. Tools never take a key.
+            Five tools. Org comes from the API key. Do not set{" "}
+            <code>MEMORY_SESSION_ID</code> in MCP JSON. Writes get an auto session id
+            for this harness process; <code>emit(session_end)</code> flushes extraction
+            and starts a new one. <code>recall</code> searches the whole org. Tools never
+            take a key.
           </p>
           <table className="w-full text-left text-sm">
             <thead className="font-mono text-xs uppercase text-text-secondary">
@@ -138,7 +183,7 @@ export function docsPages(): Record<string, DocsPage> {
                 <td className="py-3 pr-4 font-mono text-text-primary">recall</td>
                 <td className="py-3">
                   Sync search (similarity + recency + importance). Query with{" "}
-                  <code>q</code>.
+                  <code>q</code>. Org-wide unless you pass <code>session_id</code>.
                 </td>
               </tr>
               <tr className="border-t border-border-subtle align-top">
@@ -159,7 +204,7 @@ export function docsPages(): Record<string, DocsPage> {
                   <code>diff</code>, <code>session_end</code>). Not every emit becomes a
                   memory. Noisy tools are skipped. The worker extracts later (heuristic,
                   or your OpenRouter key). Send <code>session_end</code> to flush a short
-                  session.
+                  session and rotate the auto session id.
                 </td>
               </tr>
             </tbody>
@@ -236,9 +281,10 @@ export function docsPages(): Record<string, DocsPage> {
           </p>
           <h2 id="hosted">Hosted</h2>
           <p>
-            Memory API: <code>https://memoria-api-jw5g.onrender.com</code>. MCP still
-            runs on your machine via <code>uvx</code>. Dashboard keys are org-scoped.
-            Free Render sleeps after idle — the first request after a gap can be slow.
+            Memory API: set MCP <code>MEMORY_API_URL</code> to{" "}
+            <code>{hostedMemoryApiUrl}</code>. MCP still runs on your machine via{" "}
+            <code>uvx</code>. Dashboard keys are org-scoped. Free Render sleeps after
+            idle — the first request after a gap can be slow.
           </p>
         </>
       ),
@@ -284,7 +330,10 @@ export function docsPages(): Record<string, DocsPage> {
               <tr className="border-t border-border-subtle">
                 <td className="py-2 font-mono text-text-primary">session_id</td>
                 <td className="font-mono">string</td>
-                <td>Harness session scope</td>
+                <td>
+                  Optional. Omit on recall for org-wide search. On write, auto-assigned
+                  per harness process unless passed.
+                </td>
               </tr>
               <tr className="border-t border-border-subtle">
                 <td className="py-2 font-mono text-text-primary">q</td>
