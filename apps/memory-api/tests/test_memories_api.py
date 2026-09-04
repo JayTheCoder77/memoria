@@ -5,13 +5,15 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from memory_api.db.deps import get_api_key_store, get_kv_store, get_repository
+from memory_api.config import settings
+from memory_api.db.deps import get_api_key_store, get_graph_store, get_kv_store, get_repository
 from memory_api.db.models import Org
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
 from memory_api.routers.memories import _org_llm_key
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, embed_text, get_embedder
+from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
 
 
@@ -43,13 +45,22 @@ def raw_key(keys: InMemoryApiKeyStore, org_id: uuid.UUID) -> str:
 
 
 @pytest.fixture
+def graph() -> InMemoryGraphStore:
+    return InMemoryGraphStore()
+
+
+@pytest.fixture
 def client(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore
+    repo: InMemoryMemoryRepository,
+    keys: InMemoryApiKeyStore,
+    kv: InMemoryKVStore,
+    graph: InMemoryGraphStore,
 ) -> TestClient:
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -330,6 +341,7 @@ def test_search_survives_org_key_decrypt_failure(
     monkeypatch: pytest.MonkeyPatch,
     keys: InMemoryApiKeyStore,
     kv: InMemoryKVStore,
+    graph: InMemoryGraphStore,
     org_id: uuid.UUID,
     raw_key: str,
 ) -> None:
@@ -354,6 +366,7 @@ def test_search_survives_org_key_decrypt_failure(
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as client:
         target = client.post(
             "/memories",
@@ -513,7 +526,10 @@ def test_remember_writes_explicit_kv_triples(
 
 
 def test_remember_still_201_when_kv_put_raises(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, raw_key: str
+    repo: InMemoryMemoryRepository,
+    keys: InMemoryApiKeyStore,
+    graph: InMemoryGraphStore,
+    raw_key: str,
 ) -> None:
     class BoomStore(InMemoryKVStore):
         def put(self, *args, **kwargs) -> None:
@@ -523,11 +539,65 @@ def test_remember_still_201_when_kv_put_raises(
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: BoomStore()
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as client:
         created = client.post(
             "/memories",
             headers=_auth(raw_key),
             json={"session_id": "s1", "content": "We prefer pytest over unittest."},
+        )
+        assert created.status_code == 201
+    app.dependency_overrides.clear()
+
+
+def test_remember_writes_explicit_graph_triples(
+    client: TestClient, raw_key: str, org_id: uuid.UUID, graph: InMemoryGraphStore
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "zzz-unrelated-content-for-hash",
+            "graph_triples": [
+                {"subject": "user", "relation": "lives_in", "object": "berlin"},
+            ],
+        },
+    )
+    assert created.status_code == 201
+    edges = graph.neighbors(org_id, "user", hops=1)
+    assert any(
+        e.relation == "lives_in"
+        and e.object_key == "berlin"
+        and str(e.memory_id) == created.json()["id"]
+        for e in edges
+    )
+
+
+def test_remember_still_201_when_graph_add_edge_raises(
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore, raw_key: str
+) -> None:
+    class BoomGraph(InMemoryGraphStore):
+        def add_edge(self, *args, **kwargs) -> uuid.UUID:
+            raise RuntimeError("db down")
+
+    app.dependency_overrides[get_repository] = lambda: repo
+    app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: BoomGraph()
+    with TestClient(app) as client:
+        created = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={
+                "session_id": "s1",
+                "content": "Ava lives in Berlin.",
+                "graph_triples": [
+                    {"subject": "user", "relation": "lives_in", "object": "berlin"},
+                ],
+            },
         )
         assert created.status_code == 201
     app.dependency_overrides.clear()
@@ -547,3 +617,223 @@ def test_remember_accepts_agent_memory_type_aliases(client: TestClient, raw_key:
     assert created.status_code == 201, created.text
     assert created.json()["memory_type"] == "semantic"
     assert created.json()["importance"] == 0.7
+
+
+def test_search_graph_only_outside_vector_overfetch(
+    client: TestClient,
+    repo: InMemoryMemoryRepository,
+    org_id: uuid.UUID,
+    raw_key: str,
+) -> None:
+    embedder = HashEmbedder()
+    query = "What language do they prefer typescript"
+    query_embedding = embed_text(query, embedder=embedder)
+    for index in range(25):
+        repo.insert(
+            org_id=org_id,
+            session_id="s1",
+            memory_type="semantic",
+            content=f"decoy-{index}: {query}",
+            embedding=query_embedding,
+            importance=0.1,
+            source_metadata={},
+        )
+
+    target = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-graph-only-payload-not-the-query",
+            "importance": 1.0,
+            "graph_triples": [
+                {"subject": "user", "relation": "prefers", "object": "typescript"},
+            ],
+        },
+    )
+    assert target.status_code == 201
+    target_id = target.json()["id"]
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": query,
+            "session_id": "s1",
+            "explain": True,
+            "limit": 1,
+        },
+    )
+    assert search.status_code == 200
+    hits = search.json()["memories"]
+    assert hits
+    assert target_id in {row["id"] for row in hits}
+    graph_hit = next(row for row in hits if row["id"] == target_id)
+    assert graph_hit["score_details"]["graph_hops"] == 1
+    assert graph_hit["score_details"]["sources"] == ["graph"]
+    assert graph_hit["score_details"]["vector_similarity"] == 0.0
+    assert graph_hit["score_details"]["kv_match"] is None
+
+
+def test_search_graph_union_respects_session_scope(
+    client: TestClient, raw_key: str
+) -> None:
+    other_session = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s-other",
+            "content": "zzz-graph-only-payload-not-the-query",
+            "graph_triples": [
+                {"subject": "user", "relation": "prefers", "object": "typescript"},
+            ],
+        },
+    )
+    assert other_session.status_code == 201
+    other_id = other_session.json()["id"]
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+        },
+    )
+    assert search.status_code == 200
+    ids = {row["id"] for row in search.json()["memories"]}
+    assert other_id not in ids
+
+
+def test_search_graph_disabled_keeps_graph_hops_null(
+    monkeypatch: pytest.MonkeyPatch,
+    client: TestClient,
+    raw_key: str,
+) -> None:
+    monkeypatch.setattr(settings, "enable_graph", False)
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-graph-only-payload-not-the-query",
+            "graph_triples": [
+                {"subject": "user", "relation": "prefers", "object": "typescript"},
+            ],
+        },
+    )
+    assert created.status_code == 201
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+            "limit": 10,
+        },
+    )
+    assert search.status_code == 200
+    for row in search.json()["memories"]:
+        assert row["score_details"]["graph_hops"] is None
+        assert "graph" not in row["score_details"]["sources"]
+
+
+def test_search_two_hop_graph_scores_lower_relevance(
+    client: TestClient, raw_key: str
+) -> None:
+    bridge = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "bridge memory",
+            "graph_triples": [
+                {"subject": "ava", "relation": "knows", "object": "bob"},
+            ],
+        },
+    )
+    two_hop = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "two-hop target",
+            "graph_triples": [
+                {"subject": "bob", "relation": "works_at", "object": "acme"},
+            ],
+        },
+    )
+    one_hop = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "one-hop target",
+            "graph_triples": [
+                {"subject": "ava", "relation": "likes", "object": "coding"},
+            ],
+        },
+    )
+    assert bridge.status_code == 201
+    assert two_hop.status_code == 201
+    assert one_hop.status_code == 201
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "tell me about ava",
+            "session_id": "s1",
+            "explain": True,
+            "limit": 10,
+        },
+    )
+    assert search.status_code == 200
+    by_id = {row["id"]: row for row in search.json()["memories"]}
+    one_hit = by_id[one_hop.json()["id"]]
+    two_hit = by_id[two_hop.json()["id"]]
+    assert one_hit["score_details"]["graph_hops"] == 1
+    assert two_hit["score_details"]["graph_hops"] == 2
+    assert one_hit["score_details"]["relevance"] == 1.0
+    assert two_hit["score_details"]["relevance"] == 0.5
+
+
+def test_search_survives_graph_memory_hops_failure(
+    repo: InMemoryMemoryRepository,
+    keys: InMemoryApiKeyStore,
+    kv: InMemoryKVStore,
+    raw_key: str,
+) -> None:
+    class BoomGraph(InMemoryGraphStore):
+        def memory_hops(self, *args, **kwargs) -> dict[uuid.UUID, int]:
+            raise RuntimeError("graph down")
+
+    app.dependency_overrides[get_repository] = lambda: repo
+    app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: BoomGraph()
+    with TestClient(app) as client:
+        vector_only = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={
+                "session_id": "s1",
+                "content": "graph failure vector probe",
+            },
+        )
+        assert vector_only.status_code == 201
+        search = client.get(
+            "/memories/search",
+            headers=_auth(raw_key),
+            params={
+                "q": "graph failure vector probe",
+                "session_id": "s1",
+                "explain": True,
+            },
+        )
+        assert search.status_code == 200
+        assert search.json()["memories"]
+    app.dependency_overrides.clear()

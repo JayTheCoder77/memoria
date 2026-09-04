@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from memory_api.auth import get_principal, get_session_user
 from memory_api.config import settings
-from memory_api.db.deps import get_kv_store, get_repository
+from memory_api.db.deps import get_graph_store, get_kv_store, get_repository
 from memory_api.db.models import Memory, MemoryType, Org, User
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
@@ -22,11 +22,13 @@ from memory_api.services.api_keys import Principal
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
 from memory_api.services.extraction import Candidate
+from memory_api.services.graph_fanout import persist_graph_facts
+from memory_api.services.graph_seeds import derive_graph_seeds
 from memory_api.services.kv_candidates import derive_kv_candidates
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
 from memory_api.services.secrets import decrypt_secret
-from memory_api.stores.protocols import KVStore
+from memory_api.stores.protocols import GraphStore, KVStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,6 +68,7 @@ def create_memory(
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
     kv: KVStore = Depends(get_kv_store),
+    graph: GraphStore = Depends(get_graph_store),
 ) -> MemoryOut:
     candidate = Candidate(
         content=body.content,
@@ -73,6 +76,7 @@ def create_memory(
         importance=body.importance,
         source_metadata=body.source_metadata,
         kv_triples=body.kv_triples,
+        graph_triples=body.graph_triples,
     )
     memory, _inserted = persist_candidate(
         repo=repo,
@@ -88,6 +92,12 @@ def create_memory(
         candidate=candidate,
         session=getattr(repo, "_session", None),
     )
+    persist_graph_facts(
+        graph=graph,
+        memory=memory,
+        candidate=candidate,
+        session=getattr(repo, "_session", None),
+    )
     return _to_out(memory)
 
 
@@ -98,10 +108,12 @@ def search(
     limit: int = Query(default=10, ge=1, le=100),
     token_budget: int = Query(default=2048, ge=1, le=32_000),
     explain: bool = False,
+    as_of: datetime | None = None,
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
     kv: KVStore = Depends(get_kv_store),
+    graph: GraphStore = Depends(get_graph_store),
 ) -> MemorySearchResponse:
     query_embedding = embed_text(q, embedder=embedder)
     rows = repo.search(
@@ -110,11 +122,17 @@ def search(
         session_id=session_id,
         limit=max(limit * 5, 20),
     )
-    union: dict[uuid.UUID, tuple[Memory, float, bool, float | None]] = {
-        memory.id: (memory, similarity, True, None) for memory, similarity in rows
+    union: dict[uuid.UUID, tuple[Memory, float, bool, float | None, int | None]] = {
+        memory.id: (memory, similarity, True, None, None)
+        for memory, similarity in rows
     }
-    if settings.enable_kv:
+
+    api_key: str | None = None
+    model: str | None = None
+    if settings.enable_kv or settings.enable_graph:
         api_key, model = _org_llm_key(repo, principal.org_id)
+
+    if settings.enable_kv:
         candidates = derive_kv_candidates(q, api_key=api_key, model=model)
         try:
             facts = kv.search_keys(principal.org_id, candidates)
@@ -124,22 +142,55 @@ def search(
         for fact in facts:
             existing = union.get(fact.memory_id)
             if existing is not None:
-                memory, similarity, vector_hit, _ = existing
-                union[fact.memory_id] = (memory, similarity, vector_hit, 1.0)
+                memory, similarity, vector_hit, _, graph_hops = existing
+                union[fact.memory_id] = (memory, similarity, vector_hit, 1.0, graph_hops)
                 continue
             memory = repo.get(org_id=principal.org_id, memory_id=fact.memory_id)
             if memory is None:
                 continue
             if session_id is not None and memory.session_id != session_id:
                 continue
-            union[fact.memory_id] = (memory, 0.0, False, 1.0)
+            union[fact.memory_id] = (memory, 0.0, False, 1.0, None)
 
-    ranked: list[tuple[Memory, float, float, float, float, bool, float | None]] = []
-    for memory, similarity, vector_hit, kv_match in union.values():
+    if settings.enable_graph:
+        seeds = derive_graph_seeds(q, api_key=api_key, model=model)
+        try:
+            hops_map = graph.memory_hops(
+                principal.org_id, seeds, hops=2, as_of=as_of
+            )
+        except Exception:
+            logger.exception("Graph search failed; using vector/KV results only")
+            hops_map = {}
+        for memory_id, hop_count in hops_map.items():
+            existing = union.get(memory_id)
+            if existing is not None:
+                memory, similarity, vector_hit, kv_match, _ = existing
+                union[memory_id] = (
+                    memory,
+                    similarity,
+                    vector_hit,
+                    kv_match,
+                    hop_count,
+                )
+                continue
+            memory = repo.get(org_id=principal.org_id, memory_id=memory_id)
+            if memory is None:
+                continue
+            if session_id is not None and memory.session_id != session_id:
+                continue
+            union[memory_id] = (memory, 0.0, False, None, hop_count)
+
+    ranked: list[
+        tuple[Memory, float, float, float, float, bool, float | None, int | None]
+    ] = []
+    for memory, similarity, vector_hit, kv_match, graph_hops in union.values():
         recency = recency_weight(
             memory.created_at, half_life_days=settings.recency_halflife_days
         )
-        relevance = max(similarity, kv_match or 0.0)
+        graph_score = (
+            1.0 if graph_hops == 1 else 0.5 if graph_hops == 2 else 0.0
+        )
+        relevance = max(similarity, kv_match or 0.0, graph_score)
         score = retrieval_score(
             similarity=relevance,
             importance=memory.importance,
@@ -157,6 +208,7 @@ def search(
                 memory.importance,
                 vector_hit,
                 kv_match,
+                graph_hops,
             )
         )
     ranked.sort(key=lambda item: item[1], reverse=True)
@@ -170,15 +222,21 @@ def search(
         importance: float,
         vector_hit: bool,
         kv_match: float | None,
+        graph_hops: int | None,
     ) -> MemoryOut:
         details = None
         if explain:
-            relevance = max(similarity, kv_match or 0.0)
+            graph_score = (
+                1.0 if graph_hops == 1 else 0.5 if graph_hops == 2 else 0.0
+            )
+            relevance = max(similarity, kv_match or 0.0, graph_score)
             sources = []
             if vector_hit:
                 sources.append("vector")
             if kv_match is not None:
                 sources.append("kv")
+            if graph_hops is not None:
+                sources.append("graph")
             details = ScoreDetails(
                 relevance=relevance,
                 importance=importance,
@@ -186,7 +244,7 @@ def search(
                 sources=sources,
                 vector_similarity=similarity,
                 kv_match=kv_match,
-                graph_hops=None,
+                graph_hops=graph_hops,
                 weights={
                     "relevance": settings.fusion_weight_relevance,
                     "importance": settings.fusion_weight_importance,
@@ -197,8 +255,26 @@ def search(
 
     memories = truncate_to_token_budget(
         [
-            _hit(memory, score, similarity, recency, importance, vector_hit, kv_match)
-            for memory, score, similarity, recency, importance, vector_hit, kv_match in ranked
+            _hit(
+                memory,
+                score,
+                similarity,
+                recency,
+                importance,
+                vector_hit,
+                kv_match,
+                graph_hops,
+            )
+            for (
+                memory,
+                score,
+                similarity,
+                recency,
+                importance,
+                vector_hit,
+                kv_match,
+                graph_hops,
+            ) in ranked
         ],
         token_budget,
         text_of=lambda item: item.content,

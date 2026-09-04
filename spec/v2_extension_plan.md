@@ -354,18 +354,18 @@ This enables “where did the user live in March?” style questions.
 
 **Objective:** Relationship reasoning and temporal history.
 
-- [ ] Alembic migration for `graph_nodes` + `graph_edges`
-- [ ] `GraphStore` Postgres implementation
-- [ ] Soft-invalidation logic on `(subject, relation)` conflict
-- [ ] Extraction changes to emit `graph_triples`
-- [ ] Write path: node upsert + edge insert with invalidation (with caps + confidence)
-- [ ] Read path: entity extraction → 1–2 hop expansion → linked memories
-- [ ] Graph-derived relevance score in fusion
-- [ ] Basic `as_of` support on graph traversal
-- [ ] Tests:
-  - City change invalidates old `lives_in` edge but keeps history
-  - Multi-hop “what projects does X own?” style queries
-  - Scope isolation (no cross-org edges)
+- [x] Alembic migration for `graph_nodes` + `graph_edges`
+- [x] `GraphStore` Postgres implementation
+- [x] Soft-invalidation logic on `(subject, relation)` conflict
+- [x] Extraction changes to emit `graph_triples`
+- [x] Write path: node upsert + edge insert with invalidation (with caps + confidence)
+- [x] Read path: entity extraction → 1–2 hop expansion → linked memories
+- [x] Graph-derived relevance score in fusion
+- [x] Basic `as_of` support on graph traversal
+- [x] Tests:
+  - [x] City change invalidates old `lives_in` edge but keeps history
+  - [x] Multi-hop “what projects does X own?” style queries
+  - [x] Scope isolation (no cross-org edges)
 
 **Exit criteria:** Relationship queries work; contradictions soft-invalidate; temporal history preserved.
 

@@ -13,6 +13,7 @@ from memory_api.db.session import SessionLocal, engine
 from memory_api.main import app
 from memory_api.services.api_keys import generate_api_key, hash_api_key, key_last4
 from memory_api.services.embedding import EMBEDDING_DIM, HashEmbedder, get_embedder
+from memory_api.stores.graph import PostgresGraphStore
 from memory_api.stores.kv import PostgresKVStore
 
 
@@ -65,7 +66,10 @@ def pg_client() -> TestClient:
     app.dependency_overrides.clear()
     with engine.begin() as connection:
         connection.execute(
-            text("TRUNCATE kv_facts, memories, api_keys, users, event_buffer, orgs CASCADE")
+            text(
+                "TRUNCATE graph_edges, graph_nodes, kv_facts, memories, "
+                "api_keys, users, event_buffer, orgs CASCADE"
+            )
         )
 
 
@@ -224,6 +228,54 @@ def test_postgres_kv_store_round_trip_and_tenant_isolation() -> None:
         session.close()
 
 
+def test_postgres_graph_store_soft_invalidation_and_org_isolation() -> None:
+    session = SessionLocal()
+    try:
+        org_a = Org(id=uuid.uuid4(), name="graph-a", created_at=datetime.now(UTC))
+        org_b = Org(id=uuid.uuid4(), name="graph-b", created_at=datetime.now(UTC))
+        session.add_all([org_a, org_b])
+        session.flush()
+        mem_berlin = Memory(
+            org_id=org_a.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="berlin",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        mem_munich = Memory(
+            org_id=org_a.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="munich",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        session.add_all([mem_berlin, mem_munich])
+        session.flush()
+        store = PostgresGraphStore(session)
+        store.add_edge(org_a.id, "ava", "lives_in", "berlin", memory_id=mem_berlin.id)
+        before_second = datetime.now(UTC)
+        store.add_edge(org_a.id, "ava", "lives_in", "munich", memory_id=mem_munich.id)
+        current = store.neighbors(org_a.id, "ava", hops=1)
+        assert len(current) == 1
+        assert current[0].object_key == "munich"
+        assert current[0].valid is True
+        historical = store.neighbors(
+            org_a.id, "ava", hops=1, valid_only=False, as_of=before_second
+        )
+        assert len(historical) == 1
+        assert historical[0].object_key == "berlin"
+        assert historical[0].valid_to is not None
+        assert len(store.neighbors(org_a.id, "ava")) == 1
+        assert store.neighbors(org_b.id, "ava") == []
+        session.rollback()
+    finally:
+        session.close()
+
+
 def test_postgres_kv_union_search(
     pg_client: TestClient, org_and_key: tuple[str, str]
 ) -> None:
@@ -264,6 +316,50 @@ def test_postgres_kv_union_search(
     kv_hit = next(row for row in hits if row["id"] == target.json()["id"])
     assert kv_hit["score_details"]["kv_match"] == 1.0
     assert "kv" in kv_hit["score_details"]["sources"]
+
+
+def test_postgres_graph_union_search(
+    pg_client: TestClient, org_and_key: tuple[str, str]
+) -> None:
+    _, raw_key = org_and_key
+    decoy = pg_client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "What language do they prefer typescript",
+        },
+    )
+    target = pg_client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-graph-only-payload-not-the-query",
+            "graph_triples": [
+                {"subject": "user", "relation": "prefers", "object": "typescript"},
+            ],
+        },
+    )
+    assert decoy.status_code == 201, decoy.text
+    assert target.status_code == 201, target.text
+    search = pg_client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+            "limit": 10,
+        },
+    )
+    assert search.status_code == 200, search.text
+    hits = search.json()["memories"]
+    ids = [row["id"] for row in hits]
+    assert target.json()["id"] in ids
+    graph_hit = next(row for row in hits if row["id"] == target.json()["id"])
+    assert graph_hit["score_details"]["graph_hops"] == 1
+    assert "graph" in graph_hit["score_details"]["sources"]
 
 
 def test_postgres_update_and_forget(

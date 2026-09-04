@@ -12,8 +12,8 @@ from memory_api.services.api_keys import ApiKeyStore, PostgresApiKeyStore
 from memory_api.services.extraction import Extractor, HeuristicExtractor
 from memory_api.services.google_auth import get_google_verifier
 from memory_api.services.rate_limit import SlidingWindowRateLimiter
-from memory_api.stores.noop import NoOpKVStore
-from memory_api.stores.protocols import KVStore
+from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
+from memory_api.stores.protocols import GraphStore, KVStore
 
 _limiter: SlidingWindowRateLimiter | None = None
 
@@ -42,6 +42,14 @@ def get_kv_store(db: Session = Depends(get_db)) -> KVStore:
     return PostgresKVStore(db)
 
 
+def get_graph_store(db: Session = Depends(get_db)) -> GraphStore:
+    if not settings.enable_graph:
+        return NoOpGraphStore()
+    from memory_api.stores.graph import PostgresGraphStore
+
+    return PostgresGraphStore(db)
+
+
 def get_identity_repository(db: Session = Depends(get_db)) -> IdentityRepository:
     return PostgresIdentityRepository(db)
 
@@ -58,6 +66,7 @@ __all__ = [
     "get_event_store",
     "get_extractor",
     "get_google_verifier",
+    "get_graph_store",
     "get_identity_repository",
     "get_kv_store",
     "get_rate_limiter",

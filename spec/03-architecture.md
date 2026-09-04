@@ -18,17 +18,25 @@
   running a batched LLM extraction pass, deduping against existing memories, and
   writing new ones. Fully async — never blocks a harness turn.
 
-## Hybrid stores (v2 Phase 1)
+## Hybrid stores (v2 Phase 1–2)
 
-KV is on by default (`MEMORIA_ENABLE_KV=true`). `kv_facts` is a secondary index.
-Search unions exact KV hits with vector hits. Graph remains a no-op.
-See `spec/v2-phase1-kv-store.md`.
+KV stays on by default (`MEMORIA_ENABLE_KV=true`). `kv_facts` is a secondary
+index; search unions exact KV hits with vector hits. See
+`spec/v2-phase1-kv-store.md`.
+
+Graph is also on by default (`MEMORIA_ENABLE_GRAPH=true`). `graph_nodes` and
+`graph_edges` store relationship triples with soft-invalidation: a new edge for
+the same `(org, subject, relation)` marks prior edges invalid (never deleted).
+Search unions 1–2 hop graph-linked memories with vector and KV hits;
+`relevance = max(vector_similarity, kv_match, graph_score)` where 1-hop
+`graph_score` is 1.0 and 2-hop is 0.5. Optional `as_of` on search queries
+historical valid edges. See `spec/v2-phase2-graph-store.md`.
 
 `memory_api.stores` defines `VectorStore`, `KVStore`, and `GraphStore`.
 `GET /memories/search?explain=true` returns per-hit `score_details` with
-`sources` including `"vector"` and, when a KV key matches, `"kv"` with
-`kv_match=1.0`. Set `MEMORIA_ENABLE_KV=false` to restore vector-only recall.
-Graph stays behind `MEMORIA_ENABLE_GRAPH` (default false). See
+`sources` including `"vector"`, and when applicable `"kv"` (`kv_match=1.0`)
+and `"graph"` (`graph_hops` 1 or 2). Set `MEMORIA_ENABLE_KV=false` or
+`MEMORIA_ENABLE_GRAPH=false` to disable each store independently. See
 `spec/v2_extension_plan.md` and `spec/v2-phase0-foundations.md`.
 
 ## Why no cache layer
