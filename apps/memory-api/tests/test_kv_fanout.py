@@ -3,9 +3,9 @@ from unittest.mock import MagicMock
 
 from memory_api.db.models import Memory, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
+from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import HashEmbedder
 from memory_api.services.extraction import Candidate
-from memory_api.services.dedup import persist_candidate
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.stores.kv import InMemoryKVStore
 
