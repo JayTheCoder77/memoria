@@ -2,10 +2,27 @@ from __future__ import annotations
 
 import uuid
 
-from memory_api.db.models import MemoryType
+from memory_api.db.models import KvFact, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.vector import PostgresVectorStore
+
+
+def test_kv_fact_model_maps_kv_facts_table() -> None:
+    assert KvFact.__tablename__ == "kv_facts"
+    column_names = set(KvFact.__table__.columns.keys())
+    assert column_names == {
+        "id",
+        "org_id",
+        "memory_id",
+        "user_key",
+        "fact_type",
+        "entity",
+        "value",
+        "importance",
+        "created_at",
+        "updated_at",
+    }
 
 
 def test_noop_kv_returns_empty() -> None:
