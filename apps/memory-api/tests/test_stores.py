@@ -50,6 +50,16 @@ def test_in_memory_kv_put_get_search_and_org_isolation() -> None:
     assert store.get(org_b, "preference", "typescript") is not None
 
 
+def test_in_memory_kv_put_skips_empty_fact_type_or_entity() -> None:
+    store = InMemoryKVStore()
+    org_id = uuid.uuid4()
+    mem_id = uuid.uuid4()
+    store.put(org_id, mem_id, "", "entity", value="x", importance=0.5)
+    store.put(org_id, mem_id, "type", "  ", value="x", importance=0.5)
+    assert store.get(org_id, "type", "entity") is None
+    assert len(store.by_org(org_id)) == 0
+
+
 def test_in_memory_kv_upsert_replaces_memory_id() -> None:
     store = InMemoryKVStore()
     org_id = uuid.uuid4()

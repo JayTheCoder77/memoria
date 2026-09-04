@@ -181,7 +181,16 @@ def test_postgres_kv_store_round_trip_and_tenant_isolation() -> None:
             importance=0.5,
             source_metadata={},
         )
-        session.add_all([mem_a, mem_b])
+        mem_a2 = Memory(
+            org_id=org_a.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="a2",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        session.add_all([mem_a, mem_b, mem_a2])
         session.flush()
         store = PostgresKVStore(session)
         store.put(org_a.id, mem_a.id, "preference", "typescript", value="ts", importance=0.8)
@@ -190,6 +199,14 @@ def test_postgres_kv_store_round_trip_and_tenant_isolation() -> None:
         assert hit is not None
         assert hit.memory_id == mem_a.id
         assert hit.value == "ts"
+        store.put(
+            org_a.id, mem_a2.id, "preference", "typescript", value="ts2", importance=0.95
+        )
+        hit = store.get(org_a.id, "preference", "typescript")
+        assert hit is not None
+        assert hit.memory_id == mem_a2.id
+        assert hit.value == "ts2"
+        assert hit.importance == 0.95
         keys = store.search_keys(org_a.id, [("preference", "typescript")])
         assert len(keys) == 1
         assert keys[0].memory_id == mem_a.id

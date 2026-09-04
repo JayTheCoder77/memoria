@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from memory_api.db.models import KvFact
+from memory_api.db.models import KvFact, Memory
 from memory_api.stores.types import KVFact
 
 
@@ -108,6 +108,14 @@ class PostgresKVStore:
         entity_n = normalize_kv_token(entity)
         if not fact_type_n or not entity_n:
             return
+        memory_exists = self._session.scalar(
+            select(Memory.id).where(
+                Memory.id == memory_id,
+                Memory.org_id == org_id,
+            )
+        )
+        if memory_exists is None:
+            return
         now = datetime.now(UTC)
         stmt = insert(KvFact).values(
             org_id=org_id,
@@ -132,6 +140,14 @@ class PostgresKVStore:
         )
         self._session.execute(stmt)
         self._session.flush()
+        for obj in self._session:
+            if (
+                isinstance(obj, KvFact)
+                and obj.org_id == org_id
+                and obj.fact_type == fact_type_n
+                and obj.entity == entity_n
+            ):
+                self._session.expire(obj)
 
     def get(self, org_id: uuid.UUID, fact_type: str, entity: str) -> KVFact | None:
         row = self._session.scalar(
