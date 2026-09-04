@@ -22,6 +22,27 @@ def test_retrieval_score_prefers_similarity_then_importance_and_recency() -> Non
     assert similar > important
 
 
+def test_retrieval_score_uses_override_weights() -> None:
+    similarity_led = retrieval_score(
+        similarity=0.9,
+        importance=0.1,
+        recency=0.1,
+        semantic_weight=1.0,
+        importance_weight=0.0,
+        recency_weight_value=0.0,
+    )
+    importance_led = retrieval_score(
+        similarity=0.9,
+        importance=0.1,
+        recency=0.1,
+        semantic_weight=0.0,
+        importance_weight=1.0,
+        recency_weight_value=0.0,
+    )
+    assert similarity_led == 0.9
+    assert importance_led == 0.1
+
+
 def test_truncate_to_token_budget_keeps_prefix_within_budget() -> None:
     items = [
         {"content": "abcd" * 10, "id": "a"},
