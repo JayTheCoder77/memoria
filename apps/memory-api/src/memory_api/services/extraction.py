@@ -25,6 +25,7 @@ class Candidate:
     memory_type: MemoryType
     importance: float = 0.6
     source_metadata: dict[str, Any] = field(default_factory=dict)
+    kv_triples: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Extractor(Protocol):
@@ -70,9 +71,10 @@ class HeuristicExtractor:
 _LLM_SYSTEM = (
     "Extract durable memories from harness events. "
     'Return JSON {"memories":[{"content":string,'
-    '"memory_type":"episodic"|"semantic"|"procedural","importance":number}]}. '
+    '"memory_type":"episodic"|"semantic"|"procedural","importance":number,'
+    '"kv_triples":[{"fact_type":string,"entity":string,"value":string|null}]}]}. '
     "Keep preferences, decisions, facts, and reusable fixes. Skip noise. "
-    "An empty memories array is valid."
+    "kv_triples is optional. An empty memories array is valid."
 )
 
 
@@ -132,12 +134,25 @@ class LlmExtractor:
             if not text:
                 continue
             importance = min(1.0, max(0.0, float(item.get("importance", 0.6))))
+            kv_triples: list[dict[str, Any]] = []
+            for triple in item.get("kv_triples") or []:
+                if not isinstance(triple, dict):
+                    continue
+                fact_type = str(triple.get("fact_type") or "").strip()
+                entity = str(triple.get("entity") or "").strip()
+                if not fact_type or not entity:
+                    continue
+                entry: dict[str, Any] = {"fact_type": fact_type, "entity": entity}
+                if triple.get("value") is not None:
+                    entry["value"] = str(triple["value"])
+                kv_triples.append(entry)
             candidates.append(
                 Candidate(
                     content=text,
                     memory_type=memory_type,
                     importance=importance,
                     source_metadata={"extractor": "llm", "provider": "openrouter"},
+                    kv_triples=kv_triples,
                 )
             )
         return candidates

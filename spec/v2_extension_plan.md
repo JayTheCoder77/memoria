@@ -337,14 +337,14 @@ This enables “where did the user live in March?” style questions.
 
 **Objective:** Fast exact fact lookup.
 
-- [ ] Alembic migration for `kv_facts`
-- [ ] `KVStore` Postgres implementation
-- [ ] Extraction changes to emit `kv_triples`
-- [ ] Write path: fan-out to KV on successful insert (with cap)
-- [ ] Read path: candidate key derivation + KV lookup in parallel with vector
-- [ ] Fusion: incorporate KV match score into relevance
-- [ ] Tests: exact preference / city / decision lookups
-- [ ] Guardrail: controlled `fact_type` allow-list (config or table)
+- [x] Alembic migration for `kv_facts`
+- [x] `KVStore` Postgres implementation
+- [x] Extraction changes to emit `kv_triples`
+- [x] Write path: fan-out to KV on successful insert (with cap)
+- [x] Read path: candidate key derivation + KV lookup in parallel with vector
+- [x] Fusion: incorporate KV match score into relevance
+- [x] Tests: exact preference / city / decision lookups
+- [x] Guardrail: open fact_type set in Phase 1 (hard allow-list deferred)
 
 **Exit criteria:** Fact-lookup queries return correct results via KV even when pure vector ranking is weak.
 

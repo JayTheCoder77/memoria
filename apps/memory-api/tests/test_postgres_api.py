@@ -8,11 +8,12 @@ from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from memory_api.db.models import ApiKey, Org, User
+from memory_api.db.models import ApiKey, Memory, MemoryType, Org, User
 from memory_api.db.session import SessionLocal, engine
 from memory_api.main import app
 from memory_api.services.api_keys import generate_api_key, hash_api_key, key_last4
-from memory_api.services.embedding import HashEmbedder, get_embedder
+from memory_api.services.embedding import EMBEDDING_DIM, HashEmbedder, get_embedder
+from memory_api.stores.kv import PostgresKVStore
 
 
 def _postgres_available() -> bool:
@@ -63,7 +64,9 @@ def pg_client() -> TestClient:
         yield test_client
     app.dependency_overrides.clear()
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE memories, api_keys, users, event_buffer, orgs CASCADE"))
+        connection.execute(
+            text("TRUNCATE kv_facts, memories, api_keys, users, event_buffer, orgs CASCADE")
+        )
 
 
 @pytest.fixture
@@ -153,6 +156,114 @@ def test_postgres_search_isolates_tenants(pg_client: TestClient) -> None:
     ids = {hit["id"] for hit in search_a.json()["memories"]}
     assert write_a.json()["id"] in ids
     assert write_b.json()["id"] not in ids
+
+
+def test_postgres_kv_store_round_trip_and_tenant_isolation() -> None:
+    session = SessionLocal()
+    try:
+        org_a = Org(id=uuid.uuid4(), name="a", created_at=datetime.now(UTC))
+        org_b = Org(id=uuid.uuid4(), name="b", created_at=datetime.now(UTC))
+        session.add_all([org_a, org_b])
+        session.flush()
+        mem_a = Memory(
+            org_id=org_a.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="a",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        mem_b = Memory(
+            org_id=org_b.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="b",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        mem_a2 = Memory(
+            org_id=org_a.id,
+            session_id="s1",
+            memory_type=MemoryType.semantic,
+            content="a2",
+            embedding=[0.0] * EMBEDDING_DIM,
+            importance=0.5,
+            source_metadata={},
+        )
+        session.add_all([mem_a, mem_b, mem_a2])
+        session.flush()
+        store = PostgresKVStore(session)
+        store.put(org_a.id, mem_a.id, "preference", "typescript", value="ts", importance=0.8)
+        store.put(org_b.id, mem_b.id, "preference", "typescript", value="no", importance=0.1)
+        hit = store.get(org_a.id, "preference", "typescript")
+        assert hit is not None
+        assert hit.memory_id == mem_a.id
+        assert hit.value == "ts"
+        store.put(
+            org_a.id, mem_a2.id, "preference", "typescript", value="ts2", importance=0.95
+        )
+        hit = store.get(org_a.id, "preference", "typescript")
+        assert hit is not None
+        assert hit.memory_id == mem_a2.id
+        assert hit.value == "ts2"
+        assert hit.importance == 0.95
+        keys = store.search_keys(org_a.id, [("preference", "typescript")])
+        assert len(keys) == 1
+        assert keys[0].memory_id == mem_a2.id
+        store.put(
+            org_a.id, mem_b.id, "preference", "typescript", value="wrong", importance=0.1
+        )
+        hit = store.get(org_a.id, "preference", "typescript")
+        assert hit is not None
+        assert hit.memory_id == mem_a2.id
+        assert hit.value == "ts2"
+        session.rollback()
+    finally:
+        session.close()
+
+
+def test_postgres_kv_union_search(
+    pg_client: TestClient, org_and_key: tuple[str, str]
+) -> None:
+    _, raw_key = org_and_key
+    decoy = pg_client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "What language do they prefer typescript",
+        },
+    )
+    target = pg_client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-kv-only-payload-not-the-query",
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert decoy.status_code == 201, decoy.text
+    assert target.status_code == 201, target.text
+    search = pg_client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+            "limit": 10,
+        },
+    )
+    assert search.status_code == 200, search.text
+    hits = search.json()["memories"]
+    ids = [row["id"] for row in hits]
+    assert target.json()["id"] in ids
+    kv_hit = next(row for row in hits if row["id"] == target.json()["id"])
+    assert kv_hit["score_details"]["kv_match"] == 1.0
+    assert "kv" in kv_hit["score_details"]["sources"]
 
 
 def test_postgres_update_and_forget(

@@ -11,6 +11,8 @@ from memory_api.services.embedding import Embedder, get_embedder
 from memory_api.services.extraction import HeuristicExtractor, get_extractor
 from memory_api.services.secrets import decrypt_secret
 from memory_api.services.worker import run_once
+from memory_api.stores.kv import PostgresKVStore
+from memory_api.stores.noop import NoOpKVStore
 
 
 def tick(*, embedder: Embedder | None = None) -> int:
@@ -27,6 +29,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
                 model=org.openrouter_model,
             )
 
+        kv = PostgresKVStore(session) if settings.enable_kv else NoOpKVStore()
         created = run_once(
             events=PostgresEventStore(session),
             repo=PostgresMemoryRepository(session),
@@ -35,6 +38,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
             extractor_for_org=extractor_for_org,
             batch_size=settings.extract_batch_size,
             threshold=settings.dedup_threshold,
+            kv=kv,
         )
         session.commit()
         return created

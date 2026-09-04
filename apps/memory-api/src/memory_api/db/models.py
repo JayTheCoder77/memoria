@@ -5,7 +5,17 @@ from datetime import UTC, datetime
 from enum import StrEnum
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, Text
+from sqlalchemy import (
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -102,6 +112,36 @@ class Memory(Base):
     )
 
     org: Mapped[Org] = relationship(back_populates="memories")
+
+
+class KvFact(Base):
+    __tablename__ = "kv_facts"
+    __table_args__ = (
+        UniqueConstraint("org_id", "fact_type", "entity", name="uq_kv_facts_org_type_entity"),
+        Index("idx_kv_facts_org_type", "org_id", "fact_type"),
+        Index("idx_kv_facts_memory", "memory_id"),
+        Index(
+            "idx_kv_facts_org_user",
+            "org_id",
+            "user_key",
+            postgresql_where=text("user_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
+    )
+    memory_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
+    )
+    user_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fact_type: Mapped[str] = mapped_column(Text, nullable=False)
+    entity: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class EventStatus(StrEnum):

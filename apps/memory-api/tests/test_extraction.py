@@ -47,6 +47,35 @@ def _llm_http(body: dict) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
+def test_llm_extractor_parses_kv_triples_from_chat_completion() -> None:
+    http = _llm_http(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"memories":[{"content":"Prefer pytest.",'
+                            '"memory_type":"semantic","importance":0.8,'
+                            '"kv_triples":[{"fact_type":"preference","entity":"pytest"}]}]}'
+                        )
+                    }
+                }
+            ]
+        }
+    )
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        base_url="https://openrouter.ai/api/v1",
+        http=http,
+    )
+    candidates = extractor.extract(
+        [{"event_type": "message", "payload": {"content": "We prefer pytest."}}]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].kv_triples[0]["entity"] == "pytest"
+
+
 def test_llm_extractor_parses_memories_from_chat_completion() -> None:
     http = _llm_http(
         {
