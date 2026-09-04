@@ -322,12 +322,12 @@ This enables “where did the user live in March?” style questions.
 
 **Objective:** Pluggable stores without breaking current behaviour.
 
-- [ ] Define `VectorStore`, `KVStore`, `GraphStore` protocols / abstract classes
-- [ ] Wrap existing pgvector logic behind `VectorStore`
-- [ ] Add feature flags and config for fusion weights
-- [ ] Add `explain` support skeleton on search responses
-- [ ] Document hybrid mental model in `spec/`
-- [ ] Ensure all existing tests still pass with flags off
+- [x] Define `VectorStore`, `KVStore`, `GraphStore` protocols / abstract classes
+- [x] Wrap existing pgvector logic behind `VectorStore`
+- [x] Add feature flags and config for fusion weights
+- [x] Add `explain` support skeleton on search responses
+- [x] Document hybrid mental model in `spec/`
+- [x] Ensure all existing tests still pass with flags off
 
 **Exit criteria:** Vector-only path unchanged; interfaces ready for KV/Graph implementations.
 

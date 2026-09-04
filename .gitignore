@@ -45,3 +45,6 @@ __pycache__/
 # Misc
 .DS_Store
 *.pem
+
+# Superpowers SDD scratch
+.superpowers/
