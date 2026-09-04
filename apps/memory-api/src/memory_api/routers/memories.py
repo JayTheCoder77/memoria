@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -8,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from memory_api.auth import get_principal, get_session_user
 from memory_api.config import settings
 from memory_api.db.deps import get_kv_store, get_repository
-from memory_api.db.models import Memory, MemoryType, User
+from memory_api.db.models import Memory, MemoryType, Org, User
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
     MemoryCreate,
@@ -21,11 +22,26 @@ from memory_api.services.api_keys import Principal
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
 from memory_api.services.extraction import Candidate
+from memory_api.services.kv_candidates import derive_kv_candidates
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
+from memory_api.services.secrets import decrypt_secret
 from memory_api.stores.protocols import KVStore
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _org_llm_key(
+    repo: MemoryRepository, org_id: uuid.UUID
+) -> tuple[str | None, str | None]:
+    session = getattr(repo, "_session", None)
+    if session is None:
+        return None, None
+    org = session.get(Org, org_id)
+    if org is None or not org.openrouter_key_ciphertext:
+        return None, None
+    return decrypt_secret(org.openrouter_key_ciphertext), org.openrouter_model
 
 
 def _to_out(
@@ -81,6 +97,7 @@ def search(
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
+    kv: KVStore = Depends(get_kv_store),
 ) -> MemorySearchResponse:
     query_embedding = embed_text(q, embedder=embedder)
     rows = repo.search(
@@ -89,35 +106,79 @@ def search(
         session_id=session_id,
         limit=max(limit * 5, 20),
     )
-    ranked: list[tuple[Memory, float, float, float, float]] = []
-    for memory, similarity in rows:
+    union: dict[uuid.UUID, tuple[Memory, float, bool, float | None]] = {
+        memory.id: (memory, similarity, True, None) for memory, similarity in rows
+    }
+    if settings.enable_kv:
+        api_key, model = _org_llm_key(repo, principal.org_id)
+        candidates = derive_kv_candidates(q, api_key=api_key, model=model)
+        try:
+            facts = kv.search_keys(principal.org_id, candidates)
+        except Exception:
+            logger.exception("KV search failed; using vector results only")
+            facts = []
+        for fact in facts:
+            existing = union.get(fact.memory_id)
+            if existing is not None:
+                memory, similarity, vector_hit, _ = existing
+                union[fact.memory_id] = (memory, similarity, vector_hit, 1.0)
+                continue
+            memory = repo.get(org_id=principal.org_id, memory_id=fact.memory_id)
+            if memory is not None:
+                union[fact.memory_id] = (memory, 0.0, False, 1.0)
+
+    ranked: list[tuple[Memory, float, float, float, float, bool, float | None]] = []
+    for memory, similarity, vector_hit, kv_match in union.values():
         recency = recency_weight(
             memory.created_at, half_life_days=settings.recency_halflife_days
         )
+        relevance = max(similarity, kv_match or 0.0)
         score = retrieval_score(
-            similarity=similarity,
+            similarity=relevance,
             importance=memory.importance,
             recency=recency,
             semantic_weight=settings.fusion_weight_relevance,
             importance_weight=settings.fusion_weight_importance,
             recency_weight_value=settings.fusion_weight_recency,
         )
-        ranked.append((memory, score, similarity, recency, memory.importance))
+        ranked.append(
+            (
+                memory,
+                score,
+                similarity,
+                recency,
+                memory.importance,
+                vector_hit,
+                kv_match,
+            )
+        )
     ranked.sort(key=lambda item: item[1], reverse=True)
     ranked = ranked[:limit]
 
     def _hit(
-        memory: Memory, score: float, similarity: float, recency: float, importance: float
+        memory: Memory,
+        score: float,
+        similarity: float,
+        recency: float,
+        importance: float,
+        vector_hit: bool,
+        kv_match: float | None,
     ) -> MemoryOut:
         details = None
         if explain:
+            relevance = max(similarity, kv_match or 0.0)
+            sources = []
+            if vector_hit:
+                sources.append("vector")
+            if kv_match is not None:
+                sources.append("kv")
             details = ScoreDetails(
-                relevance=similarity,
+                relevance=relevance,
                 importance=importance,
                 recency=recency,
-                sources=["vector"],
+                sources=sources,
                 vector_similarity=similarity,
-                kv_match=None,
+                kv_match=kv_match,
                 graph_hops=None,
                 weights={
                     "relevance": settings.fusion_weight_relevance,
@@ -129,8 +190,8 @@ def search(
 
     memories = truncate_to_token_budget(
         [
-            _hit(memory, score, similarity, recency, importance)
-            for memory, score, similarity, recency, importance in ranked
+            _hit(memory, score, similarity, recency, importance, vector_hit, kv_match)
+            for memory, score, similarity, recency, importance, vector_hit, kv_match in ranked
         ],
         token_budget,
         text_of=lambda item: item.content,

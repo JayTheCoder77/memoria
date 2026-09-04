@@ -278,6 +278,65 @@ def test_search_explain_returns_full_score_details_keys(
     assert details["weights"]["relevance"] == 0.6
 
 
+def test_search_unions_kv_hit_when_vector_is_weak(
+    client: TestClient, raw_key: str
+) -> None:
+    decoy = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "What language do they prefer typescript",
+        },
+    )
+    target = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-kv-only-payload-not-the-query",
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert decoy.status_code == 201
+    assert target.status_code == 201
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "What language do they prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+            "limit": 10,
+        },
+    )
+    assert search.status_code == 200
+    hits = search.json()["memories"]
+    ids = [row["id"] for row in hits]
+    assert target.json()["id"] in ids
+    kv_hit = next(row for row in hits if row["id"] == target.json()["id"])
+    assert kv_hit["score_details"]["kv_match"] == 1.0
+    assert "kv" in kv_hit["score_details"]["sources"]
+
+
+def test_search_explain_vector_only_still_null_kv(
+    client: TestClient, raw_key: str
+) -> None:
+    client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={"session_id": "s1", "content": "explain skeleton probe"},
+    )
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={"q": "explain skeleton probe", "session_id": "s1", "explain": True},
+    )
+    details = search.json()["memories"][0]["score_details"]
+    assert details["kv_match"] is None
+    assert details["sources"] == ["vector"]
+
+
 def test_remember_writes_explicit_kv_triples(
     client: TestClient, raw_key: str, org_id: uuid.UUID, kv: InMemoryKVStore
 ) -> None:
