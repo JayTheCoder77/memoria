@@ -41,7 +41,11 @@ def _org_llm_key(
     org = session.get(Org, org_id)
     if org is None or not org.openrouter_key_ciphertext:
         return None, None
-    return decrypt_secret(org.openrouter_key_ciphertext), org.openrouter_model
+    try:
+        return decrypt_secret(org.openrouter_key_ciphertext), org.openrouter_model
+    except Exception:
+        logger.exception("Failed to decrypt org OpenRouter key; using rules fallback")
+        return None, None
 
 
 def _to_out(

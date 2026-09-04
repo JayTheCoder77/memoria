@@ -6,10 +6,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from memory_api.db.deps import get_api_key_store, get_kv_store, get_repository
+from memory_api.db.models import Org
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
+from memory_api.routers.memories import _org_llm_key
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
-from memory_api.services.embedding import HashEmbedder, get_embedder
+from memory_api.services.embedding import HashEmbedder, embed_text, get_embedder
 from memory_api.stores.kv import InMemoryKVStore
 
 
@@ -305,6 +307,131 @@ def test_search_kv_union_respects_session_scope(
     assert search.status_code == 200
     ids = {row["id"] for row in search.json()["memories"]}
     assert other_id not in ids
+
+
+def test_org_llm_key_decrypt_failure_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    org = Org(id=uuid.uuid4(), openrouter_key_ciphertext="cipher")
+
+    class FakeSession:
+        def get(self, model: type, pk: uuid.UUID) -> Org:
+            return org
+
+    class FakeRepo:
+        _session = FakeSession()
+
+    def boom(_ciphertext: str) -> str:
+        raise RuntimeError("decrypt failed")
+
+    monkeypatch.setattr("memory_api.routers.memories.decrypt_secret", boom)
+    assert _org_llm_key(FakeRepo(), org.id) == (None, None)
+
+
+def test_search_survives_org_key_decrypt_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    keys: InMemoryApiKeyStore,
+    kv: InMemoryKVStore,
+    org_id: uuid.UUID,
+    raw_key: str,
+) -> None:
+    org = Org(
+        id=org_id,
+        openrouter_key_ciphertext="cipher",
+        openrouter_model="anthropic/claude-sonnet-4",
+    )
+    repo = InMemoryMemoryRepository()
+    repo._session = type(
+        "FakeSession",
+        (),
+        {"get": lambda self, model, pk: org if model is Org else None},
+    )()
+
+    def boom(_ciphertext: str) -> str:
+        raise RuntimeError("decrypt failed")
+
+    monkeypatch.setattr("memory_api.routers.memories.decrypt_secret", boom)
+
+    app.dependency_overrides[get_repository] = lambda: repo
+    app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: kv
+    with TestClient(app) as client:
+        target = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={
+                "session_id": "s1",
+                "content": "zzz-kv-only-payload-not-the-query",
+                "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+            },
+        )
+        assert target.status_code == 201
+        search = client.get(
+            "/memories/search",
+            headers=_auth(raw_key),
+            params={
+                "q": "What language do they prefer typescript",
+                "session_id": "s1",
+                "explain": True,
+                "limit": 1,
+            },
+        )
+        assert search.status_code == 200
+        ids = {row["id"] for row in search.json()["memories"]}
+        assert target.json()["id"] in ids
+    app.dependency_overrides.clear()
+
+
+def test_search_kv_only_outside_vector_overfetch(
+    client: TestClient,
+    repo: InMemoryMemoryRepository,
+    org_id: uuid.UUID,
+    raw_key: str,
+) -> None:
+    embedder = HashEmbedder()
+    query = "What language do they prefer typescript"
+    query_embedding = embed_text(query, embedder=embedder)
+    for index in range(25):
+        repo.insert(
+            org_id=org_id,
+            session_id="s1",
+            memory_type="semantic",
+            content=f"decoy-{index}: {query}",
+            embedding=query_embedding,
+            importance=0.1,
+            source_metadata={},
+        )
+
+    target = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "zzz-kv-only-payload-not-the-query",
+            "importance": 1.0,
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert target.status_code == 201
+    target_id = target.json()["id"]
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": query,
+            "session_id": "s1",
+            "explain": True,
+            "limit": 1,
+        },
+    )
+    assert search.status_code == 200
+    hits = search.json()["memories"]
+    assert hits
+    assert target_id in {row["id"] for row in hits}
+    kv_hit = next(row for row in hits if row["id"] == target_id)
+    assert kv_hit["score_details"]["kv_match"] == 1.0
+    assert kv_hit["score_details"]["sources"] == ["kv"]
+    assert kv_hit["score_details"]["vector_similarity"] == 0.0
 
 
 def test_search_unions_kv_hit_when_vector_is_weak(
