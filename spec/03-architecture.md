@@ -18,13 +18,18 @@
   running a batched LLM extraction pass, deduping against existing memories, and
   writing new ones. Fully async — never blocks a harness turn.
 
-## Hybrid stores (v2 Phase 0)
+## Hybrid stores (v2 Phase 1)
 
-Search is still vector-only. `memory_api.stores` defines `VectorStore`, `KVStore`,
-and `GraphStore`. KV and Graph are no-ops behind `MEMORIA_ENABLE_KV` /
-`MEMORIA_ENABLE_GRAPH` (default false). `GET /memories/search?explain=true`
-returns per-hit `score_details` with `sources: ["vector"]` and null KV/Graph
-fields. See `spec/v2_extension_plan.md` and `spec/v2-phase0-foundations.md`.
+KV is on by default (`MEMORIA_ENABLE_KV=true`). `kv_facts` is a secondary index.
+Search unions exact KV hits with vector hits. Graph remains a no-op.
+See `spec/v2-phase1-kv-store.md`.
+
+`memory_api.stores` defines `VectorStore`, `KVStore`, and `GraphStore`.
+`GET /memories/search?explain=true` returns per-hit `score_details` with
+`sources` including `"vector"` and, when a KV key matches, `"kv"` with
+`kv_match=1.0`. Set `MEMORIA_ENABLE_KV=false` to restore vector-only recall.
+Graph stays behind `MEMORIA_ENABLE_GRAPH` (default false). See
+`spec/v2_extension_plan.md` and `spec/v2-phase0-foundations.md`.
 
 ## Why no cache layer
 A cache was in the original design to absorb repeated-query latency, but it
