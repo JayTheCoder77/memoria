@@ -11,8 +11,9 @@ from memory_api.services.embedding import Embedder, get_embedder
 from memory_api.services.extraction import HeuristicExtractor, get_extractor
 from memory_api.services.secrets import decrypt_secret
 from memory_api.services.worker import run_once
+from memory_api.stores.graph import PostgresGraphStore
 from memory_api.stores.kv import PostgresKVStore
-from memory_api.stores.noop import NoOpKVStore
+from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 
 
 def tick(*, embedder: Embedder | None = None) -> int:
@@ -30,6 +31,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
             )
 
         kv = PostgresKVStore(session) if settings.enable_kv else NoOpKVStore()
+        graph = PostgresGraphStore(session) if settings.enable_graph else NoOpGraphStore()
         created = run_once(
             events=PostgresEventStore(session),
             repo=PostgresMemoryRepository(session),
@@ -39,6 +41,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
             batch_size=settings.extract_batch_size,
             threshold=settings.dedup_threshold,
             kv=kv,
+            graph=graph,
         )
         session.commit()
         return created

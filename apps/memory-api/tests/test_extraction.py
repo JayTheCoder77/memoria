@@ -76,6 +76,35 @@ def test_llm_extractor_parses_kv_triples_from_chat_completion() -> None:
     assert candidates[0].kv_triples[0]["entity"] == "pytest"
 
 
+def test_llm_extractor_parses_graph_triples_from_chat_completion() -> None:
+    http = _llm_http(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"memories":[{"content":"Ava lives in Berlin.",'
+                            '"memory_type":"semantic","importance":0.8,'
+                            '"graph_triples":[{"subject":"user","relation":"lives_in","object":"berlin"}]}]}'
+                        )
+                    }
+                }
+            ]
+        }
+    )
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        base_url="https://openrouter.ai/api/v1",
+        http=http,
+    )
+    candidates = extractor.extract(
+        [{"event_type": "message", "payload": {"content": "Ava lives in Berlin."}}]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].graph_triples[0]["object"] == "berlin"
+
+
 def test_llm_extractor_parses_memories_from_chat_completion() -> None:
     http = _llm_http(
         {

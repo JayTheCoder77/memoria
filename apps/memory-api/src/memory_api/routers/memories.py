@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from memory_api.auth import get_principal, get_session_user
 from memory_api.config import settings
-from memory_api.db.deps import get_kv_store, get_repository
+from memory_api.db.deps import get_graph_store, get_kv_store, get_repository
 from memory_api.db.models import Memory, MemoryType, Org, User
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
@@ -22,11 +22,12 @@ from memory_api.services.api_keys import Principal
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
 from memory_api.services.extraction import Candidate
+from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.kv_candidates import derive_kv_candidates
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
 from memory_api.services.secrets import decrypt_secret
-from memory_api.stores.protocols import KVStore
+from memory_api.stores.protocols import GraphStore, KVStore
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,6 +67,7 @@ def create_memory(
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
     kv: KVStore = Depends(get_kv_store),
+    graph: GraphStore = Depends(get_graph_store),
 ) -> MemoryOut:
     candidate = Candidate(
         content=body.content,
@@ -73,6 +75,7 @@ def create_memory(
         importance=body.importance,
         source_metadata=body.source_metadata,
         kv_triples=body.kv_triples,
+        graph_triples=body.graph_triples,
     )
     memory, _inserted = persist_candidate(
         repo=repo,
@@ -84,6 +87,12 @@ def create_memory(
     )
     persist_kv_facts(
         kv=kv,
+        memory=memory,
+        candidate=candidate,
+        session=getattr(repo, "_session", None),
+    )
+    persist_graph_facts(
+        graph=graph,
         memory=memory,
         candidate=candidate,
         session=getattr(repo, "_session", None),

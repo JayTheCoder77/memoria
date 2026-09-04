@@ -9,9 +9,10 @@ from memory_api.db.repository import MemoryRepository
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder
 from memory_api.services.extraction import Extractor
+from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.kv_fanout import persist_kv_facts
-from memory_api.stores.noop import NoOpKVStore
-from memory_api.stores.protocols import KVStore
+from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
+from memory_api.stores.protocols import GraphStore, KVStore
 
 
 def run_once(
@@ -24,8 +25,10 @@ def run_once(
     threshold: float = 0.92,
     extractor_for_org: Callable[[UUID], Extractor] | None = None,
     kv: KVStore | None = None,
+    graph: GraphStore | None = None,
 ) -> int:
     kv = kv or NoOpKVStore()
+    graph = graph or NoOpGraphStore()
     claimed = events.claim_ready(batch_size)
     if not claimed:
         return 0
@@ -46,6 +49,7 @@ def run_once(
                 extractor=batch_extractor,
                 threshold=threshold,
                 kv=kv,
+                graph=graph,
             )
     except Exception:
         events.mark_failed(claimed)
@@ -62,6 +66,7 @@ def _process(
     extractor: Extractor,
     threshold: float,
     kv: KVStore,
+    graph: GraphStore,
 ) -> int:
     payload = [
         {"event_type": row.event_type, "payload": row.payload, "id": str(row.id)}
@@ -81,6 +86,12 @@ def _process(
         )
         persist_kv_facts(
             kv=kv,
+            memory=memory,
+            candidate=candidate,
+            session=getattr(repo, "_session", None),
+        )
+        persist_graph_facts(
+            graph=graph,
             memory=memory,
             candidate=candidate,
             session=getattr(repo, "_session", None),

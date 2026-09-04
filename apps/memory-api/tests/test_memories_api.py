@@ -5,13 +5,14 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from memory_api.db.deps import get_api_key_store, get_kv_store, get_repository
+from memory_api.db.deps import get_api_key_store, get_graph_store, get_kv_store, get_repository
 from memory_api.db.models import Org
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
 from memory_api.routers.memories import _org_llm_key
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, embed_text, get_embedder
+from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
 
 
@@ -43,13 +44,19 @@ def raw_key(keys: InMemoryApiKeyStore, org_id: uuid.UUID) -> str:
 
 
 @pytest.fixture
+def graph() -> InMemoryGraphStore:
+    return InMemoryGraphStore()
+
+
+@pytest.fixture
 def client(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore, graph: InMemoryGraphStore
 ) -> TestClient:
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -330,6 +337,7 @@ def test_search_survives_org_key_decrypt_failure(
     monkeypatch: pytest.MonkeyPatch,
     keys: InMemoryApiKeyStore,
     kv: InMemoryKVStore,
+    graph: InMemoryGraphStore,
     org_id: uuid.UUID,
     raw_key: str,
 ) -> None:
@@ -354,6 +362,7 @@ def test_search_survives_org_key_decrypt_failure(
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as client:
         target = client.post(
             "/memories",
@@ -513,7 +522,7 @@ def test_remember_writes_explicit_kv_triples(
 
 
 def test_remember_still_201_when_kv_put_raises(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, raw_key: str
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, graph: InMemoryGraphStore, raw_key: str
 ) -> None:
     class BoomStore(InMemoryKVStore):
         def put(self, *args, **kwargs) -> None:
@@ -523,11 +532,65 @@ def test_remember_still_201_when_kv_put_raises(
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
     app.dependency_overrides[get_kv_store] = lambda: BoomStore()
+    app.dependency_overrides[get_graph_store] = lambda: graph
     with TestClient(app) as client:
         created = client.post(
             "/memories",
             headers=_auth(raw_key),
             json={"session_id": "s1", "content": "We prefer pytest over unittest."},
+        )
+        assert created.status_code == 201
+    app.dependency_overrides.clear()
+
+
+def test_remember_writes_explicit_graph_triples(
+    client: TestClient, raw_key: str, org_id: uuid.UUID, graph: InMemoryGraphStore
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "zzz-unrelated-content-for-hash",
+            "graph_triples": [
+                {"subject": "user", "relation": "lives_in", "object": "berlin"},
+            ],
+        },
+    )
+    assert created.status_code == 201
+    edges = graph.neighbors(org_id, "user", hops=1)
+    assert any(
+        e.relation == "lives_in"
+        and e.object_key == "berlin"
+        and str(e.memory_id) == created.json()["id"]
+        for e in edges
+    )
+
+
+def test_remember_still_201_when_graph_add_edge_raises(
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore, raw_key: str
+) -> None:
+    class BoomGraph(InMemoryGraphStore):
+        def add_edge(self, *args, **kwargs) -> uuid.UUID:
+            raise RuntimeError("db down")
+
+    app.dependency_overrides[get_repository] = lambda: repo
+    app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: kv
+    app.dependency_overrides[get_graph_store] = lambda: BoomGraph()
+    with TestClient(app) as client:
+        created = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={
+                "session_id": "s1",
+                "content": "Ava lives in Berlin.",
+                "graph_triples": [
+                    {"subject": "user", "relation": "lives_in", "object": "berlin"},
+                ],
+            },
         )
         assert created.status_code == 201
     app.dependency_overrides.clear()

@@ -26,6 +26,7 @@ class Candidate:
     importance: float = 0.6
     source_metadata: dict[str, Any] = field(default_factory=dict)
     kv_triples: list[dict[str, Any]] = field(default_factory=list)
+    graph_triples: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Extractor(Protocol):
@@ -72,9 +73,10 @@ _LLM_SYSTEM = (
     "Extract durable memories from harness events. "
     'Return JSON {"memories":[{"content":string,'
     '"memory_type":"episodic"|"semantic"|"procedural","importance":number,'
-    '"kv_triples":[{"fact_type":string,"entity":string,"value":string|null}]}]}. '
+    '"kv_triples":[{"fact_type":string,"entity":string,"value":string|null}],'
+    '"graph_triples":[{"subject":string,"relation":string,"object":string}]}]}. '
     "Keep preferences, decisions, facts, and reusable fixes. Skip noise. "
-    "kv_triples is optional. An empty memories array is valid."
+    "kv_triples and graph_triples are optional. An empty memories array is valid."
 )
 
 
@@ -146,6 +148,23 @@ class LlmExtractor:
                 if triple.get("value") is not None:
                     entry["value"] = str(triple["value"])
                 kv_triples.append(entry)
+            graph_triples: list[dict[str, Any]] = []
+            for triple in item.get("graph_triples") or []:
+                if not isinstance(triple, dict):
+                    continue
+                subject = str(triple.get("subject") or "").strip()
+                relation = str(triple.get("relation") or "").strip()
+                object_key = str(triple.get("object") or "").strip()
+                if not subject or not relation or not object_key:
+                    continue
+                gentry: dict[str, Any] = {
+                    "subject": subject,
+                    "relation": relation,
+                    "object": object_key,
+                }
+                if triple.get("confidence") is not None:
+                    gentry["confidence"] = float(triple["confidence"])
+                graph_triples.append(gentry)
             candidates.append(
                 Candidate(
                     content=text,
@@ -153,6 +172,7 @@ class LlmExtractor:
                     importance=importance,
                     source_metadata={"extractor": "llm", "provider": "openrouter"},
                     kv_triples=kv_triples,
+                    graph_triples=graph_triples,
                 )
             )
         return candidates

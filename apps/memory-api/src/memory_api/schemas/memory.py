@@ -45,6 +45,7 @@ class MemoryCreate(BaseModel):
     importance: float = 0.5
     source_metadata: dict[str, Any] = Field(default_factory=dict)
     kv_triples: list[dict[str, Any]] = Field(default_factory=list)
+    graph_triples: list[dict[str, Any]] = Field(default_factory=list)
 
     @field_validator("memory_type", mode="before")
     @classmethod
