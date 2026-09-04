@@ -10,7 +10,13 @@ from memory_api.config import settings
 from memory_api.db.deps import get_repository
 from memory_api.db.models import Memory, MemoryType, User
 from memory_api.db.repository import MemoryRepository
-from memory_api.schemas.memory import MemoryCreate, MemoryOut, MemorySearchResponse, MemoryUpdate
+from memory_api.schemas.memory import (
+    MemoryCreate,
+    MemoryOut,
+    MemorySearchResponse,
+    MemoryUpdate,
+    ScoreDetails,
+)
 from memory_api.services.api_keys import Principal
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
@@ -20,9 +26,14 @@ from memory_api.services.scoring import recency_weight, retrieval_score, truncat
 router = APIRouter()
 
 
-def _to_out(memory: Memory, score: float | None = None) -> MemoryOut:
+def _to_out(
+    memory: Memory,
+    score: float | None = None,
+    score_details: ScoreDetails | None = None,
+) -> MemoryOut:
     payload = MemoryOut.model_validate(memory)
     payload.score = score
+    payload.score_details = score_details
     return payload
 
 
@@ -56,6 +67,7 @@ def search(
     session_id: str | None = None,
     limit: int = Query(default=10, ge=1, le=100),
     token_budget: int = Query(default=2048, ge=1, le=32_000),
+    explain: bool = False,
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
@@ -67,23 +79,49 @@ def search(
         session_id=session_id,
         limit=max(limit * 5, 20),
     )
-    ranked = sorted(
-        (
-            (
-                memory,
-                retrieval_score(
-                    similarity=similarity,
-                    importance=memory.importance,
-                    recency=recency_weight(memory.created_at),
-                ),
+    ranked: list[tuple[Memory, float, float, float, float]] = []
+    for memory, similarity in rows:
+        recency = recency_weight(
+            memory.created_at, half_life_days=settings.recency_halflife_days
+        )
+        score = retrieval_score(
+            similarity=similarity,
+            importance=memory.importance,
+            recency=recency,
+            semantic_weight=settings.fusion_weight_relevance,
+            importance_weight=settings.fusion_weight_importance,
+            recency_weight_value=settings.fusion_weight_recency,
+        )
+        ranked.append((memory, score, similarity, recency, memory.importance))
+    ranked.sort(key=lambda item: item[1], reverse=True)
+    ranked = ranked[:limit]
+
+    def _hit(
+        memory: Memory, score: float, similarity: float, recency: float, importance: float
+    ) -> MemoryOut:
+        details = None
+        if explain:
+            details = ScoreDetails(
+                relevance=similarity,
+                importance=importance,
+                recency=recency,
+                sources=["vector"],
+                vector_similarity=similarity,
+                kv_match=None,
+                graph_hops=None,
+                weights={
+                    "relevance": settings.fusion_weight_relevance,
+                    "importance": settings.fusion_weight_importance,
+                    "recency": settings.fusion_weight_recency,
+                },
             )
-            for memory, similarity in rows
-        ),
-        key=lambda item: item[1],
-        reverse=True,
-    )[:limit]
+        return _to_out(memory, score, details)
+
     memories = truncate_to_token_budget(
-        [_to_out(memory, score) for memory, score in ranked],
+        [
+            _hit(memory, score, similarity, recency, importance)
+            for memory, score, similarity, recency, importance in ranked
+        ],
         token_budget,
         text_of=lambda item: item.content,
     )

@@ -215,6 +215,60 @@ def test_duplicate_remember_reinforces_existing(client: TestClient, raw_key: str
     assert second.json()["access_count"] == 1
 
 
+def test_search_omits_score_details_by_default(
+    client: TestClient, raw_key: str
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "explain skeleton probe",
+            "importance": 0.7,
+        },
+    )
+    assert created.status_code == 201
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={"q": "explain skeleton probe", "session_id": "s1"},
+    )
+    assert search.status_code == 200
+    hit = search.json()["memories"][0]
+    assert hit.get("score_details") is None
+
+
+def test_search_explain_returns_full_score_details_keys(
+    client: TestClient, raw_key: str
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "explain skeleton probe",
+            "importance": 0.7,
+        },
+    )
+    assert created.status_code == 201
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={"q": "explain skeleton probe", "session_id": "s1", "explain": True},
+    )
+    assert search.status_code == 200
+    details = search.json()["memories"][0]["score_details"]
+    assert details["sources"] == ["vector"]
+    assert details["kv_match"] is None
+    assert details["graph_hops"] is None
+    assert details["vector_similarity"] == details["relevance"]
+    assert details["importance"] == 0.7
+    assert set(details["weights"]) == {"relevance", "importance", "recency"}
+    assert details["weights"]["relevance"] == 0.6
+
+
 def test_remember_accepts_agent_memory_type_aliases(client: TestClient, raw_key: str) -> None:
     created = client.post(
         "/memories",
