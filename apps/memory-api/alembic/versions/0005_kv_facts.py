@@ -20,7 +20,12 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "kv_facts",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column(
+            "id",
+            postgresql.UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
         sa.Column(
             "org_id",
             postgresql.UUID(as_uuid=True),
@@ -38,8 +43,18 @@ def upgrade() -> None:
         sa.Column("entity", sa.Text(), nullable=False),
         sa.Column("value", sa.Text(), nullable=True),
         sa.Column("importance", sa.Float(), nullable=False, server_default="0.5"),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
         sa.UniqueConstraint("org_id", "fact_type", "entity", name="uq_kv_facts_org_type_entity"),
     )
     op.create_index("idx_kv_facts_org_type", "kv_facts", ["org_id", "fact_type"])
