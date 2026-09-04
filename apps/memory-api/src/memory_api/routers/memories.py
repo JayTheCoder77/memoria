@@ -124,8 +124,11 @@ def search(
                 union[fact.memory_id] = (memory, similarity, vector_hit, 1.0)
                 continue
             memory = repo.get(org_id=principal.org_id, memory_id=fact.memory_id)
-            if memory is not None:
-                union[fact.memory_id] = (memory, 0.0, False, 1.0)
+            if memory is None:
+                continue
+            if session_id is not None and memory.session_id != session_id:
+                continue
+            union[fact.memory_id] = (memory, 0.0, False, 1.0)
 
     ranked: list[tuple[Memory, float, float, float, float, bool, float | None]] = []
     for memory, similarity, vector_hit, kv_match in union.values():

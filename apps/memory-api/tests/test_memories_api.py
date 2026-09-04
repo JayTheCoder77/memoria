@@ -278,6 +278,35 @@ def test_search_explain_returns_full_score_details_keys(
     assert details["weights"]["relevance"] == 0.6
 
 
+def test_search_kv_union_respects_session_scope(
+    client: TestClient, raw_key: str
+) -> None:
+    other_session = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s-other",
+            "content": "zzz-kv-only-payload-not-the-query",
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert other_session.status_code == 201
+    other_id = other_session.json()["id"]
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={
+            "q": "prefer typescript",
+            "session_id": "s1",
+            "explain": True,
+        },
+    )
+    assert search.status_code == 200
+    ids = {row["id"] for row in search.json()["memories"]}
+    assert other_id not in ids
+
+
 def test_search_unions_kv_hit_when_vector_is_weak(
     client: TestClient, raw_key: str
 ) -> None:
