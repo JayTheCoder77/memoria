@@ -31,11 +31,14 @@ def retrieval_score(
     similarity: float,
     importance: float,
     recency: float,
+    semantic_weight: float = SEMANTIC_WEIGHT,
+    importance_weight: float = IMPORTANCE_WEIGHT,
+    recency_weight_value: float = RECENCY_WEIGHT,
 ) -> float:
     return (
-        SEMANTIC_WEIGHT * similarity
-        + IMPORTANCE_WEIGHT * importance
-        + RECENCY_WEIGHT * recency
+        semantic_weight * similarity
+        + importance_weight * importance
+        + recency_weight_value * recency
     )
 
 

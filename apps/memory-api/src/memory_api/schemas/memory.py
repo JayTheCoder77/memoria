@@ -73,6 +73,17 @@ class MemoryUpdate(BaseModel):
         return coerce_memory_type(value)
 
 
+class ScoreDetails(BaseModel):
+    relevance: float
+    importance: float
+    recency: float
+    sources: list[str]
+    vector_similarity: float
+    kv_match: float | None = None
+    graph_hops: int | None = None
+    weights: dict[str, float]
+
+
 class MemoryOut(BaseModel):
     id: uuid.UUID
     org_id: uuid.UUID
@@ -86,6 +97,7 @@ class MemoryOut(BaseModel):
     updated_at: datetime | None
     last_accessed_at: datetime | None
     score: float | None = None
+    score_details: ScoreDetails | None = None
 
     model_config = {"from_attributes": True}
 
