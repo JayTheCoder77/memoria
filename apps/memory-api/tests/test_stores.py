@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 
-from memory_api.db.models import KvFact, MemoryType
+from memory_api.db.models import GraphEdgeRow, GraphNode, KvFact, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
+from memory_api.stores.graph import (
+    InMemoryGraphStore,
+    normalize_graph_token,
+)
 from memory_api.stores.kv import InMemoryKVStore, normalize_kv_token
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.vector import PostgresVectorStore
@@ -91,6 +96,101 @@ def test_noop_kv_returns_empty() -> None:
     assert store.by_org(org_id) == []
 
 
+def test_graph_node_model_maps_graph_nodes_table() -> None:
+    assert GraphNode.__tablename__ == "graph_nodes"
+    column_names = set(GraphNode.__table__.columns.keys())
+    assert column_names == {
+        "id",
+        "org_id",
+        "entity_key",
+        "label",
+        "properties",
+        "created_at",
+    }
+
+
+def test_graph_edge_row_model_maps_graph_edges_table() -> None:
+    assert GraphEdgeRow.__tablename__ == "graph_edges"
+    column_names = set(GraphEdgeRow.__table__.columns.keys())
+    assert column_names == {
+        "id",
+        "org_id",
+        "subject_id",
+        "relation",
+        "object_id",
+        "memory_id",
+        "valid",
+        "valid_from",
+        "valid_to",
+        "confidence",
+        "properties",
+        "created_at",
+    }
+
+
+def test_normalize_graph_token_strips_and_lowercases() -> None:
+    assert normalize_graph_token("  Berlin ") == "berlin"
+
+
+def test_in_memory_graph_upsert_node_same_key_returns_same_id() -> None:
+    store = InMemoryGraphStore()
+    org_id = uuid.uuid4()
+    first = store.upsert_node(org_id, "Ava", "person")
+    second = store.upsert_node(org_id, "ava", "other")
+    assert first == second
+
+
+def test_in_memory_graph_add_edge_invalidates_prior_lives_in() -> None:
+    store = InMemoryGraphStore()
+    org_id = uuid.uuid4()
+    mem_berlin = uuid.uuid4()
+    mem_munich = uuid.uuid4()
+    store.add_edge(org_id, "ava", "lives_in", "berlin", memory_id=mem_berlin)
+    before_second = datetime.now(UTC)
+    store.add_edge(org_id, "ava", "lives_in", "munich", memory_id=mem_munich)
+    current = store.neighbors(org_id, "ava", hops=1)
+    assert len(current) == 1
+    assert current[0].object_key == "munich"
+    assert current[0].valid is True
+    historical = store.neighbors(
+        org_id, "ava", hops=1, valid_only=False, as_of=before_second
+    )
+    assert len(historical) == 1
+    assert historical[0].object_key == "berlin"
+    assert historical[0].valid_to is not None
+
+
+def test_in_memory_graph_memory_hops_one_and_two() -> None:
+    store = InMemoryGraphStore()
+    org_id = uuid.uuid4()
+    mem_near = uuid.uuid4()
+    mem_far = uuid.uuid4()
+    store.add_edge(org_id, "ava", "knows", "bob", memory_id=mem_near)
+    store.add_edge(org_id, "bob", "works_at", "acme", memory_id=mem_far)
+    hops = store.memory_hops(org_id, ["ava"], hops=2)
+    assert hops[mem_near] == 1
+    assert hops[mem_far] == 2
+
+
+def test_in_memory_graph_add_edge_skips_empty_subject() -> None:
+    store = InMemoryGraphStore()
+    org_id = uuid.uuid4()
+    edge_id = store.add_edge(
+        org_id, "  ", "lives_in", "berlin", memory_id=uuid.uuid4()
+    )
+    assert isinstance(edge_id, uuid.UUID)
+    assert store.neighbors(org_id, "berlin") == []
+
+
+def test_in_memory_graph_org_isolation() -> None:
+    store = InMemoryGraphStore()
+    org_a = uuid.uuid4()
+    org_b = uuid.uuid4()
+    store.add_edge(org_a, "ava", "lives_in", "berlin", memory_id=uuid.uuid4())
+    assert len(store.neighbors(org_a, "ava")) == 1
+    assert store.neighbors(org_b, "ava") == []
+
+
 def test_noop_graph_returns_empty_neighbors() -> None:
     store = NoOpGraphStore()
     org_id = uuid.uuid4()
@@ -102,6 +202,7 @@ def test_noop_graph_returns_empty_neighbors() -> None:
     assert isinstance(edge_id, uuid.UUID)
     assert store.neighbors(org_id, "ava") == []
     assert store.memories_for_subgraph(org_id, ["ava"]) == []
+    assert store.memory_hops(org_id, ["ava"]) == {}
 
 
 def test_vector_store_search_delegates_to_repository() -> None:

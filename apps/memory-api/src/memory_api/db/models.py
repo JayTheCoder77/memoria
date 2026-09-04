@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     Float,
@@ -142,6 +143,63 @@ class KvFact(Base):
     importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class GraphNode(Base):
+    __tablename__ = "graph_nodes"
+    __table_args__ = (
+        UniqueConstraint("org_id", "entity_key", name="uq_graph_nodes_org_key"),
+        Index("idx_graph_nodes_org_key", "org_id", "entity_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
+    )
+    entity_key: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class GraphEdgeRow(Base):
+    __tablename__ = "graph_edges"
+    __table_args__ = (
+        Index("idx_graph_edges_org", "org_id"),
+        Index(
+            "idx_graph_edges_subject",
+            "subject_id",
+            postgresql_where=text("valid = true"),
+        ),
+        Index(
+            "idx_graph_edges_object",
+            "object_id",
+            postgresql_where=text("valid = true"),
+        ),
+        Index("idx_graph_edges_memory", "memory_id"),
+        Index("idx_graph_edges_valid_time", "org_id", "valid_from", "valid_to"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
+    )
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("graph_nodes.id"), nullable=False
+    )
+    relation: Mapped[str] = mapped_column(Text, nullable=False)
+    object_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("graph_nodes.id"), nullable=False
+    )
+    memory_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memories.id", ondelete="SET NULL"), nullable=True
+    )
+    valid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class EventStatus(StrEnum):

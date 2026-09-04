@@ -1,10 +1,15 @@
 from memory_api.config import Settings
 
 
-def test_hybrid_flags_kv_on_graph_off() -> None:
+def test_hybrid_flags_kv_on_graph_on() -> None:
     s = Settings()
     assert s.enable_kv is True
-    assert s.enable_graph is False
+    assert s.enable_graph is True
+
+
+def test_graph_max_edges_per_add_default() -> None:
+    s = Settings()
+    assert s.graph_max_edges_per_add == 8
 
 
 def test_kv_max_triples_per_add_default() -> None:

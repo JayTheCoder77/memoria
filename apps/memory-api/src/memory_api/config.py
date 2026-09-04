@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     dedup_threshold: float = 0.92
     consolidate_threshold: float = 0.85
     enable_kv: bool = True
-    enable_graph: bool = False
+    enable_graph: bool = True
     kv_max_triples_per_add: int = 6
+    graph_max_edges_per_add: int = 8
     fusion_weight_relevance: float = 0.6
     fusion_weight_importance: float = 0.2
     fusion_weight_recency: float = 0.2
