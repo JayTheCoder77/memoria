@@ -4,6 +4,7 @@ import uuid
 
 from memory_api.db.models import KvFact, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
+from memory_api.stores.kv import InMemoryKVStore, normalize_kv_token
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.vector import PostgresVectorStore
 
@@ -23,6 +24,45 @@ def test_kv_fact_model_maps_kv_facts_table() -> None:
         "created_at",
         "updated_at",
     }
+
+
+def test_normalize_kv_token_strips_and_lowercases() -> None:
+    assert normalize_kv_token("  TypeScript ") == "typescript"
+
+
+def test_in_memory_kv_put_get_search_and_org_isolation() -> None:
+    store = InMemoryKVStore()
+    org_a = uuid.uuid4()
+    org_b = uuid.uuid4()
+    mem_a = uuid.uuid4()
+    mem_b = uuid.uuid4()
+    store.put(org_a, mem_a, "Preference", "TypeScript", value="ts", importance=0.8)
+    store.put(org_b, mem_b, "preference", "typescript", value="other", importance=0.1)
+    hit = store.get(org_a, "preference", "typescript")
+    assert hit is not None
+    assert hit.memory_id == mem_a
+    assert hit.value == "ts"
+    assert hit.importance == 0.8
+    assert store.get(org_a, "preference", "python") is None
+    keys = store.search_keys(org_a, [("preference", "typescript"), ("city", "lisbon")])
+    assert [row.memory_id for row in keys] == [mem_a]
+    assert all(row.org_id == org_a for row in store.by_org(org_a))
+    assert store.get(org_b, "preference", "typescript") is not None
+
+
+def test_in_memory_kv_upsert_replaces_memory_id() -> None:
+    store = InMemoryKVStore()
+    org_id = uuid.uuid4()
+    first = uuid.uuid4()
+    second = uuid.uuid4()
+    store.put(org_id, first, "city", "lisbon", value=None, importance=0.4)
+    store.put(org_id, second, "city", "lisbon", value="pt", importance=0.9)
+    hit = store.get(org_id, "city", "lisbon")
+    assert hit is not None
+    assert hit.memory_id == second
+    assert hit.value == "pt"
+    assert hit.importance == 0.9
+    assert len(store.by_org(org_id)) == 1
 
 
 def test_noop_kv_returns_empty() -> None:
