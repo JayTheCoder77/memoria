@@ -51,7 +51,10 @@ def graph() -> InMemoryGraphStore:
 
 @pytest.fixture
 def client(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore, graph: InMemoryGraphStore
+    repo: InMemoryMemoryRepository,
+    keys: InMemoryApiKeyStore,
+    kv: InMemoryKVStore,
+    graph: InMemoryGraphStore,
 ) -> TestClient:
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
@@ -523,7 +526,10 @@ def test_remember_writes_explicit_kv_triples(
 
 
 def test_remember_still_201_when_kv_put_raises(
-    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, graph: InMemoryGraphStore, raw_key: str
+    repo: InMemoryMemoryRepository,
+    keys: InMemoryApiKeyStore,
+    graph: InMemoryGraphStore,
+    raw_key: str,
 ) -> None:
     class BoomStore(InMemoryKVStore):
         def put(self, *args, **kwargs) -> None:
