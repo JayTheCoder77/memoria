@@ -39,3 +39,23 @@ def test_llm_error_falls_back_to_rules() -> None:
         http=http,
     )
     assert ("preference", "typescript") in keys
+
+
+def test_llm_malformed_keys_falls_back_to_rules() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"content": '{"keys":"invalid"}'}}
+                ]
+            },
+        )
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    keys = derive_kv_candidates(
+        "prefer typescript",
+        api_key="sk-or-test",
+        http=http,
+    )
+    assert ("preference", "typescript") in keys

@@ -105,9 +105,14 @@ def _llm_candidates(
     response.raise_for_status()
     raw = response.json()["choices"][0]["message"]["content"] or "{}"
     payload = json.loads(raw)
+    keys = payload.get("keys")
+    if keys is None:
+        keys = []
+    elif not isinstance(keys, list):
+        raise ValueError("LLM keys payload is not a list")
     results: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for item in payload.get("keys") or []:
+    for item in keys:
         if not isinstance(item, dict):
             continue
         _add_candidate(
@@ -133,17 +138,22 @@ def derive_kv_candidates(
 
     from memory_api.config import settings
 
-    client = http or httpx.Client(timeout=30.0)
-    try:
-        return _llm_candidates(
-            query,
-            api_key=api_key,
-            model=model or settings.llm_model,
-            base_url=settings.llm_base_url,
-            http=client,
-            http_referer=settings.openrouter_http_referer,
-            app_title=settings.openrouter_app_title,
-        )
-    except Exception:
-        logger.exception("KV candidate LLM failed; using rules fallback")
-        return _rules_candidates(query)
+    def _derive_with_llm(client: httpx.Client) -> list[tuple[str, str]]:
+        try:
+            return _llm_candidates(
+                query,
+                api_key=api_key,
+                model=model or settings.llm_model,
+                base_url=settings.llm_base_url,
+                http=client,
+                http_referer=settings.openrouter_http_referer,
+                app_title=settings.openrouter_app_title,
+            )
+        except Exception:
+            logger.exception("KV candidate LLM failed; using rules fallback")
+            return _rules_candidates(query)
+
+    if http is None:
+        with httpx.Client(timeout=30.0) as client:
+            return _derive_with_llm(client)
+    return _derive_with_llm(http)
