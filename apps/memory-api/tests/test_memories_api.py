@@ -5,11 +5,12 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from memory_api.db.deps import get_api_key_store, get_repository
+from memory_api.db.deps import get_api_key_store, get_kv_store, get_repository
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, get_embedder
+from memory_api.stores.kv import InMemoryKVStore
 
 
 @pytest.fixture
@@ -20,6 +21,11 @@ def repo() -> InMemoryMemoryRepository:
 @pytest.fixture
 def keys() -> InMemoryApiKeyStore:
     return InMemoryApiKeyStore()
+
+
+@pytest.fixture
+def kv() -> InMemoryKVStore:
+    return InMemoryKVStore()
 
 
 @pytest.fixture
@@ -35,10 +41,13 @@ def raw_key(keys: InMemoryApiKeyStore, org_id: uuid.UUID) -> str:
 
 
 @pytest.fixture
-def client(repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore) -> TestClient:
+def client(
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, kv: InMemoryKVStore
+) -> TestClient:
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
     app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: kv
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -267,6 +276,46 @@ def test_search_explain_returns_full_score_details_keys(
     assert details["importance"] == 0.7
     assert set(details["weights"]) == {"relevance", "importance", "recency"}
     assert details["weights"]["relevance"] == 0.6
+
+
+def test_remember_writes_explicit_kv_triples(
+    client: TestClient, raw_key: str, org_id: uuid.UUID, kv: InMemoryKVStore
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "zzz-unrelated-content-for-hash",
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert created.status_code == 201
+    fact = kv.get(org_id, "preference", "typescript")
+    assert fact is not None
+    assert str(fact.memory_id) == created.json()["id"]
+
+
+def test_remember_still_201_when_kv_put_raises(
+    repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore, raw_key: str
+) -> None:
+    class BoomStore(InMemoryKVStore):
+        def put(self, *args, **kwargs) -> None:
+            raise RuntimeError("db down")
+
+    app.dependency_overrides[get_repository] = lambda: repo
+    app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
+    app.dependency_overrides[get_api_key_store] = lambda: keys
+    app.dependency_overrides[get_kv_store] = lambda: BoomStore()
+    with TestClient(app) as client:
+        created = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={"session_id": "s1", "content": "We prefer pytest over unittest."},
+        )
+        assert created.status_code == 201
+    app.dependency_overrides.clear()
 
 
 def test_remember_accepts_agent_memory_type_aliases(client: TestClient, raw_key: str) -> None:

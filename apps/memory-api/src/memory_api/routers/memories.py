@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from memory_api.auth import get_principal, get_session_user
 from memory_api.config import settings
-from memory_api.db.deps import get_repository
+from memory_api.db.deps import get_kv_store, get_repository
 from memory_api.db.models import Memory, MemoryType, User
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
@@ -21,7 +21,9 @@ from memory_api.services.api_keys import Principal
 from memory_api.services.dedup import persist_candidate
 from memory_api.services.embedding import Embedder, embed_text, get_embedder
 from memory_api.services.extraction import Candidate
+from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
+from memory_api.stores.protocols import KVStore
 
 router = APIRouter()
 
@@ -43,12 +45,14 @@ def create_memory(
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
+    kv: KVStore = Depends(get_kv_store),
 ) -> MemoryOut:
     candidate = Candidate(
         content=body.content,
         memory_type=body.memory_type,
         importance=body.importance,
         source_metadata=body.source_metadata,
+        kv_triples=body.kv_triples,
     )
     memory, _inserted = persist_candidate(
         repo=repo,
@@ -57,6 +61,12 @@ def create_memory(
         session_id=body.session_id,
         candidate=candidate,
         threshold=settings.dedup_threshold,
+    )
+    persist_kv_facts(
+        kv=kv,
+        memory=memory,
+        candidate=candidate,
+        session=getattr(repo, "_session", None),
     )
     return _to_out(memory)
 
