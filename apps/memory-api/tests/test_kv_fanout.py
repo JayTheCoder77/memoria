@@ -39,6 +39,27 @@ def test_persist_kv_facts_writes_heuristic_triple() -> None:
     assert kv.get(memory.org_id, "preference", "pytest") is not None
 
 
+def test_persist_kv_facts_survives_resolve_error(monkeypatch) -> None:
+    memory = _memory()
+    kv = InMemoryKVStore()
+
+    def _raise(_candidate: Candidate) -> None:
+        raise RuntimeError("resolve failed")
+
+    monkeypatch.setattr(
+        "memory_api.services.kv_fanout.resolve_kv_triples",
+        _raise,
+    )
+    persist_kv_facts(
+        kv=kv,
+        memory=memory,
+        candidate=Candidate(
+            content=memory.content,
+            memory_type=MemoryType.semantic,
+        ),
+    )
+
+
 def test_persist_kv_facts_survives_put_error() -> None:
     memory = _memory()
     kv = MagicMock()

@@ -22,7 +22,12 @@ def persist_kv_facts(
 ) -> None:
     if not settings.enable_kv:
         return
-    for triple in resolve_kv_triples(candidate):
+    try:
+        triples = resolve_kv_triples(candidate)
+    except Exception:
+        logger.exception("kv fan-out failed")
+        return
+    for triple in triples:
         try:
             if session is not None:
                 with session.begin_nested():
