@@ -25,6 +25,7 @@ class Candidate:
     memory_type: MemoryType
     importance: float = 0.6
     source_metadata: dict[str, Any] = field(default_factory=dict)
+    kv_triples: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Extractor(Protocol):
