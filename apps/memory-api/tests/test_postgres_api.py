@@ -209,7 +209,14 @@ def test_postgres_kv_store_round_trip_and_tenant_isolation() -> None:
         assert hit.importance == 0.95
         keys = store.search_keys(org_a.id, [("preference", "typescript")])
         assert len(keys) == 1
-        assert keys[0].memory_id == mem_a.id
+        assert keys[0].memory_id == mem_a2.id
+        store.put(
+            org_a.id, mem_b.id, "preference", "typescript", value="wrong", importance=0.1
+        )
+        hit = store.get(org_a.id, "preference", "typescript")
+        assert hit is not None
+        assert hit.memory_id == mem_a2.id
+        assert hit.value == "ts2"
         session.rollback()
     finally:
         session.close()
