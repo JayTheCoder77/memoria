@@ -26,6 +26,12 @@ class Settings(BaseSettings):
     extract_batch_size: int = 10
     dedup_threshold: float = 0.92
     consolidate_threshold: float = 0.85
+    enable_kv: bool = False
+    enable_graph: bool = False
+    fusion_weight_relevance: float = 0.6
+    fusion_weight_importance: float = 0.2
+    fusion_weight_recency: float = 0.2
+    recency_halflife_days: float = 14.0
 
 
 settings = Settings()
