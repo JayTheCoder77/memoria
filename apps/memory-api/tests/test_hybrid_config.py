@@ -1,10 +1,15 @@
 from memory_api.config import Settings
 
 
-def test_hybrid_flags_default_off() -> None:
+def test_hybrid_flags_kv_on_graph_off() -> None:
     s = Settings()
-    assert s.enable_kv is False
+    assert s.enable_kv is True
     assert s.enable_graph is False
+
+
+def test_kv_max_triples_per_add_default() -> None:
+    s = Settings()
+    assert s.kv_max_triples_per_add == 6
 
 
 def test_fusion_weights_match_current_scoring_defaults() -> None:
