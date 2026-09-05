@@ -316,6 +316,8 @@ def test_postgres_kv_union_search(
     kv_hit = next(row for row in hits if row["id"] == target.json()["id"])
     assert kv_hit["score_details"]["kv_match"] == 1.0
     assert "kv" in kv_hit["score_details"]["sources"]
+    timings = search.json()["timings_ms"]
+    assert set(timings) == {"embed", "vector", "kv", "graph", "total"}
 
 
 def test_postgres_graph_union_search(

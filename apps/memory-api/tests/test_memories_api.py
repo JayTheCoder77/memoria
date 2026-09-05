@@ -259,6 +259,7 @@ def test_search_omits_score_details_by_default(
     assert search.status_code == 200
     hit = search.json()["memories"][0]
     assert hit.get("score_details") is None
+    assert search.json().get("timings_ms") is None
 
 
 def test_search_explain_returns_full_score_details_keys(
@@ -289,6 +290,9 @@ def test_search_explain_returns_full_score_details_keys(
     assert details["importance"] == 0.7
     assert set(details["weights"]) == {"relevance", "importance", "recency"}
     assert details["weights"]["relevance"] == 0.6
+    timings = search.json()["timings_ms"]
+    assert set(timings) == {"embed", "vector", "kv", "graph", "total"}
+    assert timings["total"] >= 0
 
 
 def test_search_kv_union_respects_session_scope(

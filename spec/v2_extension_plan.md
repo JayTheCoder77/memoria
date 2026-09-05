@@ -375,13 +375,13 @@ This enables “where did the user live in March?” style questions.
 
 **Objective:** Single coherent hybrid `search`.
 
-- [ ] Parallel orchestrator that fans out to Vector + KV + Graph
-- [ ] Candidate union + multi-signal scoring
-- [ ] Configurable fusion weights
-- [ ] Token-budget truncation (reuse existing helper)
-- [ ] Full `explain=true` response shape
-- [ ] Latency instrumentation per store
-- [ ] Benchmark suite covering the three query classes + temporal
+- [x] Parallel orchestrator that fans out to Vector + KV + Graph
+- [x] Candidate union + multi-signal scoring
+- [x] Configurable fusion weights
+- [x] Token-budget truncation (reuse existing helper)
+- [x] Full `explain=true` response shape
+- [x] Latency instrumentation per store
+- [x] Benchmark suite covering the three query classes + temporal
 
 **Exit criteria:** One `recall` / search endpoint returns fused results; explain mode is usable for debugging.
 
