@@ -391,13 +391,14 @@ This enables “where did the user live in March?” style questions.
 
 **Objective:** One extraction pass feeds all three stores cleanly.
 
-- [ ] Update LLM extractor prompt/schema to return kv + graph triples + entities
-- [ ] Keep heuristic extractor as fallback (regex / keyword rules for preferences, decisions, fixes)
-- [ ] Make LLM extractor default when org has a key
-- [ ] ADD-only policy with graph soft-invalidation + KV upsert handling updates
+- [x] Update LLM extractor prompt/schema to return kv + graph triples + entities
+- [x] Keep heuristic extractor as fallback (regex / keyword rules for preferences, decisions, fixes)
+- [x] Make LLM extractor default when org has a key
+- [x] ADD-only policy with graph soft-invalidation + KV upsert handling updates
 - [ ] Improve dedup with optional entity overlap signal
-- [ ] Cap enforcement and low-confidence triple dropping
-- [ ] Tests for end-to-end write → three-store population
+- [x] Cap enforcement per write
+- [ ] Low-confidence triple dropping
+- [x] Tests for end-to-end write → three-store population
 
 **Exit criteria:** Successful extraction populates Vector + KV + Graph from a single pass.
 

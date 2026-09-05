@@ -37,9 +37,16 @@ Graph reads out concurrently (`ThreadPoolExecutor`). Ranking is unchanged.
 `GET /memories/search?explain=true` returns per-hit `score_details` (`sources`,
 `kv_match`, `graph_hops`) and request-level `timings_ms` (`embed`, `vector`,
 `kv`, `graph`, `total`). Set `MEMORIA_ENABLE_KV=false` or
-`MEMORIA_ENABLE_GRAPH=false` to disable each store independently. See
-`spec/v2_extension_plan.md`, `spec/v2-phase0-foundations.md`, and
-`spec/v2-phase3-fusion.md`.
+`MEMORIA_ENABLE_GRAPH=false` to disable each store independently.
+
+`remember` writes the canonical memory first, then fills KV + graph with one
+sync OpenRouter enrich call when the org has a key (10s timeout). Empty result,
+missing key, or enrich failure falls back to regex. Explicit `kv_triples` /
+`graph_triples` skip enrich. `emit` still only queues; the worker uses
+`LlmExtractor` when a key is present, then the same three-store fan-out. MCP
+server `instructions` tell the agent to `emit` after user turns. See
+`spec/v2_extension_plan.md`, `spec/v2-phase0-foundations.md`,
+`spec/v2-phase3-fusion.md`, and `spec/v2-llm-hybrid-writes.md`.
 
 ## Why no cache layer
 A cache was in the original design to absorb repeated-query latency, but it

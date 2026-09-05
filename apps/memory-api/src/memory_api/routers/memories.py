@@ -24,6 +24,7 @@ from memory_api.services.embedding import Embedder, embed_text, get_embedder
 from memory_api.services.extraction import Candidate
 from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.hybrid_search import HybridRetriever, RankedHit
+from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.secrets import decrypt_secret
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
@@ -76,6 +77,26 @@ def create_memory(
         kv_triples=body.kv_triples,
         graph_triples=body.graph_triples,
     )
+    if (
+        (settings.enable_kv or settings.enable_graph)
+        and not candidate.kv_triples
+        and not candidate.graph_triples
+    ):
+        api_key, model = _org_llm_key(repo, principal.org_id)
+        kv_triples, graph_triples = enrich_hybrid_triples(
+            body.content,
+            api_key=api_key,
+            model=model,
+        )
+        if kv_triples or graph_triples:
+            candidate = Candidate(
+                content=body.content,
+                memory_type=body.memory_type,
+                importance=body.importance,
+                source_metadata=body.source_metadata,
+                kv_triples=kv_triples,
+                graph_triples=graph_triples,
+            )
     memory, _inserted = persist_candidate(
         repo=repo,
         embedder=embedder,
