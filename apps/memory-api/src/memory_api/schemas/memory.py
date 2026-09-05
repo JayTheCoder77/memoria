@@ -106,3 +106,4 @@ class MemoryOut(BaseModel):
 
 class MemorySearchResponse(BaseModel):
     memories: list[MemoryOut]
+    timings_ms: dict[str, float] | None = None

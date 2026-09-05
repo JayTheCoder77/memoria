@@ -75,3 +75,12 @@ class GraphStore(Protocol):
     def memories_for_subgraph(
         self, org_id: uuid.UUID, entity_keys: list[str], *, hops: int = 1
     ) -> list[uuid.UUID]: ...
+
+    def memory_hops(
+        self,
+        org_id: uuid.UUID,
+        entity_keys: list[str],
+        *,
+        hops: int = 2,
+        as_of: datetime | None = None,
+    ) -> dict[uuid.UUID, int]: ...
