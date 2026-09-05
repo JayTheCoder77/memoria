@@ -25,7 +25,17 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-mcp = MCPServer("memoria", version="0.1.0")
+_INSTRUCTIONS = (
+    "Memoria is this org's memory. The user should not have to ask you to log it. "
+    "After each user turn, call emit with event_type=message and payload.content "
+    "set to the user's text. Also emit important tool_call and diff events; skip "
+    "noisy reads/greps. Call emit with event_type=session_end when the thread is "
+    "done. Use remember only when you or the user are sure a fact must persist "
+    "immediately. Use recall for prior preferences, facts, and relationships. "
+    "Do not put API keys or session ids in chat."
+)
+
+mcp = MCPServer("memoria", version="0.1.0", instructions=_INSTRUCTIONS)
 _http = httpx.Client(base_url=os.environ.get("MEMORY_API_URL", "http://127.0.0.1:8000"))
 client = MemoryApiClient(http=_http)
 
@@ -86,10 +96,11 @@ def remember(
     memory_type: str = "semantic",
     importance: float = 0.5,
 ) -> dict[str, Any]:
-    """Store a durable memory. memory_type is episodic, semantic, or procedural.
+    """Store a durable memory now. Prefer emit for ordinary conversation.
 
-    Omit session_id. The adapter assigns one for this harness process and
-    rotates it after emit(session_end). Do not put a session id in MCP JSON.
+    memory_type is episodic, semantic, or procedural. Omit session_id. The
+    adapter assigns one for this harness process and rotates it after
+    emit(session_end). Do not put a session id in MCP JSON.
     """
     return client.remember(
         api_key=_api_key(),
@@ -148,7 +159,8 @@ def emit(
     payload: dict[str, Any] | None = None,
     session_id: str | None = None,
 ) -> dict[str, Any]:
-    """Buffer a harness event for async extraction. Not every event becomes a memory.
+    """Buffer a harness event. Call this yourself after user turns; do not wait
+    for the user to ask. Not every event becomes a memory.
 
     event_type must be message, tool_call, diff, or session_end. payload is an
     object (use content for text). Omit session_id. session_end flushes the

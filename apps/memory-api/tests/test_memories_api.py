@@ -529,6 +529,110 @@ def test_remember_writes_explicit_kv_triples(
     assert str(fact.memory_id) == created.json()["id"]
 
 
+def test_remember_llm_enriches_kv_and_graph_when_org_has_key(
+    client: TestClient,
+    raw_key: str,
+    org_id: uuid.UUID,
+    kv: InMemoryKVStore,
+    graph: InMemoryGraphStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "memory_api.routers.memories._org_llm_key",
+        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+    )
+    monkeypatch.setattr(
+        "memory_api.routers.memories.enrich_hybrid_triples",
+        lambda _content, **_kwargs: (
+            [{"fact_type": "preference", "entity": "rust", "value": None}],
+            [{"subject": "user", "relation": "prefers", "object": "rust"}],
+        ),
+    )
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "zzz-unrelated-content-for-hash",
+        },
+    )
+    assert created.status_code == 201
+    fact = kv.get(org_id, "preference", "rust")
+    assert fact is not None
+    assert str(fact.memory_id) == created.json()["id"]
+    edges = graph.neighbors(org_id, "user", hops=1)
+    assert any(
+        e.relation == "prefers"
+        and e.object_key == "rust"
+        and str(e.memory_id) == created.json()["id"]
+        for e in edges
+    )
+
+
+def test_remember_skips_llm_enrich_when_explicit_triples(
+    client: TestClient,
+    raw_key: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = {"n": 0}
+
+    def _enrich(*_args, **_kwargs):
+        calls["n"] += 1
+        return [], []
+
+    monkeypatch.setattr(
+        "memory_api.routers.memories._org_llm_key",
+        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+    )
+    monkeypatch.setattr(
+        "memory_api.routers.memories.enrich_hybrid_triples",
+        _enrich,
+    )
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "zzz-unrelated-content-for-hash",
+            "kv_triples": [{"fact_type": "preference", "entity": "typescript"}],
+        },
+    )
+    assert created.status_code == 201
+    assert calls["n"] == 0
+
+
+def test_remember_regex_fallback_when_llm_returns_empty(
+    client: TestClient,
+    raw_key: str,
+    org_id: uuid.UUID,
+    kv: InMemoryKVStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        "memory_api.routers.memories._org_llm_key",
+        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+    )
+    monkeypatch.setattr(
+        "memory_api.routers.memories.enrich_hybrid_triples",
+        lambda *_args, **_kwargs: ([], []),
+    )
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": "We prefer pytest over unittest in this repo.",
+        },
+    )
+    assert created.status_code == 201
+    fact = kv.get(org_id, "preference", "pytest")
+    assert fact is not None
+    assert str(fact.memory_id) == created.json()["id"]
+
+
 def test_remember_still_201_when_kv_put_raises(
     repo: InMemoryMemoryRepository,
     keys: InMemoryApiKeyStore,

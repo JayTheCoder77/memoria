@@ -15,3 +15,12 @@ def test_mcp_tools_are_registered() -> None:
     assert "content" in required
     assert "api_key" not in required
     assert "org_id" not in required
+
+
+def test_mcp_instructions_tell_agent_to_emit_turns() -> None:
+    text = mcp.instructions or ""
+    lowered = text.lower()
+    assert "emit" in lowered
+    assert "session_end" in lowered
+    assert "remember" in lowered
+    assert "user" in lowered
