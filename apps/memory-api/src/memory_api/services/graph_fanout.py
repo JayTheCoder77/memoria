@@ -30,6 +30,8 @@ def persist_graph_facts(
     for triple in triples:
         try:
             confidence = float(triple.get("confidence", 1.0))
+            if confidence < settings.graph_min_confidence:
+                continue
             if session is not None:
                 with session.begin_nested():
                     graph.add_edge(

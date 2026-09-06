@@ -109,6 +109,7 @@ SQLAlchemy: `GraphNode`, `GraphEdgeRow` (`GraphEdge` is already the dataclass in
 |---------|------|---------|
 | `enable_graph` | bool | `true` |
 | `graph_max_edges_per_add` | int | `8` |
+| `graph_min_confidence` | float | `0.5` |
 
 `enable_kv` stays `true`. Update `.env.example`: `MEMORIA_ENABLE_GRAPH=true`, `MEMORIA_GRAPH_MAX_EDGES_PER_ADD=8`.
 

@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     enable_graph: bool = True
     kv_max_triples_per_add: int = 6
     graph_max_edges_per_add: int = 8
+    graph_min_confidence: float = 0.5
     fusion_weight_relevance: float = 0.6
     fusion_weight_importance: float = 0.2
     fusion_weight_recency: float = 0.2

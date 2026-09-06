@@ -12,6 +12,11 @@ def test_graph_max_edges_per_add_default() -> None:
     assert s.graph_max_edges_per_add == 8
 
 
+def test_graph_min_confidence_default() -> None:
+    s = Settings()
+    assert s.graph_min_confidence == 0.5
+
+
 def test_kv_max_triples_per_add_default() -> None:
     s = Settings()
     assert s.kv_max_triples_per_add == 6
