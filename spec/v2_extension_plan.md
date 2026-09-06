@@ -397,7 +397,7 @@ This enables “where did the user live in March?” style questions.
 - [x] ADD-only policy with graph soft-invalidation + KV upsert handling updates
 - [ ] Improve dedup with optional entity overlap signal
 - [x] Cap enforcement per write
-- [ ] Low-confidence triple dropping
+- [x] Low-confidence triple dropping (`MEMORIA_GRAPH_MIN_CONFIDENCE`, default 0.5)
 - [x] Tests for end-to-end write → three-store population
 
 **Exit criteria:** Successful extraction populates Vector + KV + Graph from a single pass.

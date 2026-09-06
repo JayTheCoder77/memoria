@@ -27,6 +27,8 @@ index; search unions exact KV hits with vector hits. See
 Graph is also on by default (`MEMORIA_ENABLE_GRAPH=true`). `graph_nodes` and
 `graph_edges` store relationship triples with soft-invalidation: a new edge for
 the same `(org, subject, relation)` marks prior edges invalid (never deleted).
+`persist_graph_facts` skips triples with `confidence` below
+`MEMORIA_GRAPH_MIN_CONFIDENCE` (default `0.5`); omitted confidence is `1.0`.
 Search unions 1–2 hop graph-linked memories with vector and KV hits;
 `relevance = max(vector_similarity, kv_match, graph_score)` where 1-hop
 `graph_score` is 1.0 and 2-hop is 0.5. Optional `as_of` on search queries

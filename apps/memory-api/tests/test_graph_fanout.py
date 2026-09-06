@@ -82,6 +82,57 @@ def test_persist_graph_facts_survives_add_edge_error() -> None:
     graph.add_edge.assert_called()
 
 
+def test_persist_graph_facts_drops_below_min_confidence(monkeypatch) -> None:
+    from memory_api.config import settings
+
+    monkeypatch.setattr(settings, "graph_min_confidence", 0.5)
+    graph = InMemoryGraphStore()
+    memory = _memory()
+    persist_graph_facts(
+        graph=graph,
+        memory=memory,
+        candidate=Candidate(
+            content="zzz-unrelated-content-for-hash",
+            memory_type=MemoryType.semantic,
+            graph_triples=[
+                {
+                    "subject": "user",
+                    "relation": "lives_in",
+                    "object": "paris",
+                    "confidence": 0.49,
+                },
+                {
+                    "subject": "user",
+                    "relation": "prefers",
+                    "object": "pytest",
+                    "confidence": 0.5,
+                },
+            ],
+        ),
+    )
+    edges = graph.neighbors(memory.org_id, "user", hops=1)
+    assert not any(e.relation == "lives_in" and e.object_key == "paris" for e in edges)
+    assert any(e.relation == "prefers" and e.object_key == "pytest" for e in edges)
+
+
+def test_persist_graph_facts_keeps_missing_confidence() -> None:
+    graph = InMemoryGraphStore()
+    memory = _memory()
+    persist_graph_facts(
+        graph=graph,
+        memory=memory,
+        candidate=Candidate(
+            content="zzz-unrelated-content-for-hash",
+            memory_type=MemoryType.semantic,
+            graph_triples=[
+                {"subject": "user", "relation": "works_on", "object": "memoria"},
+            ],
+        ),
+    )
+    edges = graph.neighbors(memory.org_id, "user", hops=1)
+    assert any(e.relation == "works_on" and e.object_key == "memoria" for e in edges)
+
+
 def test_persist_graph_facts_noop_when_flag_off(monkeypatch) -> None:
     from memory_api.config import settings
 
