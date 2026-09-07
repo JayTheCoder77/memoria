@@ -32,7 +32,12 @@ def complete_json(
             payload = _one(messages, provider=provider, http=http)
         except Exception as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            logger.warning("LLM provider %s failed (%s)", provider.base_url, status or exc)
+            logger.warning(
+                "LLM provider %s model %s failed (%s)",
+                provider.base_url,
+                provider.model,
+                status or exc,
+            )
             continue
         if payload:
             return payload

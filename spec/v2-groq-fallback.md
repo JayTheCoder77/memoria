@@ -15,7 +15,7 @@ On **remember enrich** and **emit worker extract** only:
 
 1. Org OpenRouter key (existing BYOK + model), if present.
 2. Org Groq key (BYOK, encrypted like OpenRouter). Model is always
-   `llama-3.1-8b-instant` (or `MEMORIA_GROQ_MODEL` server default). No UI picker.
+   `openai/gpt-oss-20b` (or `MEMORIA_GROQ_MODEL` server default). No UI picker.
 3. Existing regex / heuristic, if both skipped or failed.
 
 Search query parsing (`derive_kv_candidates`, `derive_graph_seeds`) is unchanged.
@@ -35,7 +35,7 @@ Search query parsing (`derive_kv_candidates`, `derive_graph_seeds`) is unchanged
 |---|---|
 | Cascade | OpenRouter BYOK → Groq BYOK → regex/heuristic |
 | Host | Groq OpenAI-compatible API |
-| Groq model | Fixed `llama-3.1-8b-instant`; not stored per org; not shown as an editable Settings field |
+| Groq model | Fixed `openai/gpt-oss-20b`; not stored per org; not shown as an editable Settings field |
 | Groq key | Per-org BYOK, same encrypt/`last4` pattern as OpenRouter |
 | Scope | `remember` triple enrich + worker `LlmExtractor` |
 | Missing Groq key | Skip Groq; regex/heuristic after OpenRouter (or immediately if no OpenRouter key) |
@@ -54,7 +54,7 @@ Alembic migration on `orgs` (mirror OpenRouter, no model column):
 
 ## Settings UI
 
-Second card next to OpenRouter: **Groq · BYOK**. Password input + save/clear. Status line `configured · …last4` or `not configured`. Copy: used when OpenRouter is missing or fails; model is fixed (`llama-3.1-8b-instant`) and not editable.
+Second card next to OpenRouter: **Groq · BYOK**. Password input + save/clear. Status line `configured · …last4` or `not configured`. Copy: used when OpenRouter is missing or fails; model is fixed (`openai/gpt-oss-20b`) and not editable.
 
 Do not add a Groq model input. Leave the OpenRouter model field as it is.
 
@@ -63,7 +63,7 @@ Do not add a Groq model input. Leave the OpenRouter model field as it is.
 | Setting | Default | Purpose |
 |---|---|---|
 | `groq_base_url` | `https://api.groq.com/openai/v1` | Chat completions root |
-| `groq_model` | `llama-3.1-8b-instant` | Only Groq model Memoria will call |
+| `groq_model` | `openai/gpt-oss-20b` | Only Groq model Memoria will call |
 
 Operators may change the model via env. Users cannot. No `MEMORIA_FALLBACK_LLM_API_KEY`.
 

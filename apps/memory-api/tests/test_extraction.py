@@ -266,7 +266,7 @@ def test_llm_extractor_falls_back_to_groq_then_heuristic() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=httpx.Client(transport=httpx.MockTransport(groq_ok)),
@@ -286,7 +286,7 @@ def test_llm_extractor_falls_back_to_groq_then_heuristic() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=httpx.Client(transport=httpx.MockTransport(all_fail)),

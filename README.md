@@ -62,7 +62,7 @@ and the same client ID in `apps/memory-api/.env` as `MEMORIA_GOOGLE_CLIENT_ID`.
 `MEMORIA_EMBEDDER=minilm` runs MiniLM in-process (`uv sync --extra minilm`). Do not mix
 embedders on one database. Extraction uses each org’s keys from dashboard Settings
 (BYOK): OpenRouter first, then Groq as fallback (model fixed to
-`llama-3.1-8b-instant` — not selectable). With no keys, the worker uses the
+`openai/gpt-oss-20b` — not selectable). With no keys, the worker uses the
 heuristic extractor.
 
 Recall latency:

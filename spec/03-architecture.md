@@ -47,7 +47,7 @@ content. See `spec/v2-phase4-entity-dedup.md`.
 
 `remember` writes the canonical memory first, then fills KV + graph with an LLM
 cascade: OpenRouter BYOK (10s), then Groq BYOK (10s, fixed
-`llama-3.1-8b-instant`), then regex/heuristic. Missing Groq key skips Groq.
+`openai/gpt-oss-20b`), then regex/heuristic. Missing Groq key skips Groq.
 Empty result or enrich failure falls through to the next step. Explicit
 `kv_triples` / `graph_triples` skip enrich. `emit` still only queues; the worker
 uses the same cascade, then the same three-store fan-out. MCP server

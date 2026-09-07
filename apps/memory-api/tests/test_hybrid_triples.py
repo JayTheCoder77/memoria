@@ -89,7 +89,7 @@ def test_enrich_openrouter_429_then_groq() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=httpx.Client(transport=httpx.MockTransport(handler)),
