@@ -131,58 +131,70 @@ class LlmExtractor:
         )
         if not payload:
             return HeuristicExtractor().extract(events)
-        candidates: list[Candidate] = []
-        for item in payload.get("memories") or []:
-            if not isinstance(item, dict):
-                continue
-            try:
-                memory_type = MemoryType(str(item.get("memory_type", "")))
-            except ValueError:
-                continue
-            text = str(item.get("content") or "").strip()
-            if not text:
-                continue
-            importance = min(1.0, max(0.0, float(item.get("importance", 0.6))))
-            kv_triples: list[dict[str, Any]] = []
-            for triple in item.get("kv_triples") or []:
-                if not isinstance(triple, dict):
+        try:
+            memories = payload.get("memories")
+            if not isinstance(memories, list):
+                return HeuristicExtractor().extract(events)
+            candidates: list[Candidate] = []
+            for item in memories:
+                if not isinstance(item, dict):
                     continue
-                fact_type = str(triple.get("fact_type") or "").strip()
-                entity = str(triple.get("entity") or "").strip()
-                if not fact_type or not entity:
+                try:
+                    memory_type = MemoryType(str(item.get("memory_type", "")))
+                except ValueError:
                     continue
-                entry: dict[str, Any] = {"fact_type": fact_type, "entity": entity}
-                if triple.get("value") is not None:
-                    entry["value"] = str(triple["value"])
-                kv_triples.append(entry)
-            graph_triples: list[dict[str, Any]] = []
-            for triple in item.get("graph_triples") or []:
-                if not isinstance(triple, dict):
+                text = str(item.get("content") or "").strip()
+                if not text:
                     continue
-                subject = str(triple.get("subject") or "").strip()
-                relation = str(triple.get("relation") or "").strip()
-                object_key = str(triple.get("object") or "").strip()
-                if not subject or not relation or not object_key:
+                try:
+                    importance = min(1.0, max(0.0, float(item.get("importance", 0.6))))
+                except (TypeError, ValueError):
                     continue
-                gentry: dict[str, Any] = {
-                    "subject": subject,
-                    "relation": relation,
-                    "object": object_key,
-                }
-                if triple.get("confidence") is not None:
-                    gentry["confidence"] = float(triple["confidence"])
-                graph_triples.append(gentry)
-            candidates.append(
-                Candidate(
-                    content=text,
-                    memory_type=memory_type,
-                    importance=importance,
-                    source_metadata={"extractor": "llm", "provider": "openrouter"},
-                    kv_triples=kv_triples,
-                    graph_triples=graph_triples,
+                kv_triples: list[dict[str, Any]] = []
+                for triple in item.get("kv_triples") or []:
+                    if not isinstance(triple, dict):
+                        continue
+                    fact_type = str(triple.get("fact_type") or "").strip()
+                    entity = str(triple.get("entity") or "").strip()
+                    if not fact_type or not entity:
+                        continue
+                    entry: dict[str, Any] = {"fact_type": fact_type, "entity": entity}
+                    if triple.get("value") is not None:
+                        entry["value"] = str(triple["value"])
+                    kv_triples.append(entry)
+                graph_triples: list[dict[str, Any]] = []
+                for triple in item.get("graph_triples") or []:
+                    if not isinstance(triple, dict):
+                        continue
+                    subject = str(triple.get("subject") or "").strip()
+                    relation = str(triple.get("relation") or "").strip()
+                    object_key = str(triple.get("object") or "").strip()
+                    if not subject or not relation or not object_key:
+                        continue
+                    gentry: dict[str, Any] = {
+                        "subject": subject,
+                        "relation": relation,
+                        "object": object_key,
+                    }
+                    if triple.get("confidence") is not None:
+                        try:
+                            gentry["confidence"] = float(triple["confidence"])
+                        except (TypeError, ValueError):
+                            pass
+                    graph_triples.append(gentry)
+                candidates.append(
+                    Candidate(
+                        content=text,
+                        memory_type=memory_type,
+                        importance=importance,
+                        source_metadata={"extractor": "llm"},
+                        kv_triples=kv_triples,
+                        graph_triples=graph_triples,
+                    )
                 )
-            )
-        return candidates
+            return candidates
+        except Exception:
+            return HeuristicExtractor().extract(events)
 
 
 def get_extractor(*, api_key: str | None = None, model: str | None = None) -> Extractor:

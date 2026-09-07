@@ -143,6 +143,48 @@ def test_llm_extractor_empty_list_is_success() -> None:
     assert extractor.extract([{"event_type": "message", "payload": {"content": "ok"}}]) == []
 
 
+def test_llm_extractor_falls_back_to_heuristic_on_invalid_memories_schema() -> None:
+    http = _llm_http({"choices": [{"message": {"content": '{"memories":"invalid"}'}}]})
+    extractor = LlmExtractor(api_key="sk-or-test", model="openai/gpt-4o-mini", http=http)
+    candidates = extractor.extract(
+        [
+            {
+                "event_type": "message",
+                "payload": {"content": "We prefer pytest over unittest."},
+            }
+        ]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].source_metadata["extractor"] == "heuristic"
+
+
+def test_llm_extractor_skips_item_with_invalid_importance() -> None:
+    http = _llm_http(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "content": (
+                            '{"memories":[{"content":"Prefer pytest.",'
+                            '"memory_type":"semantic","importance":"nope"}]}'
+                        )
+                    }
+                }
+            ]
+        }
+    )
+    extractor = LlmExtractor(api_key="sk-or-test", model="openai/gpt-4o-mini", http=http)
+    candidates = extractor.extract(
+        [
+            {
+                "event_type": "message",
+                "payload": {"content": "We prefer pytest over unittest."},
+            }
+        ]
+    )
+    assert candidates == []
+
+
 def test_llm_extractor_calls_openrouter_with_byok_headers() -> None:
     seen: dict[str, str] = {}
 
