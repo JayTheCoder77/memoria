@@ -41,9 +41,9 @@ def test_empty_batch_is_success() -> None:
     assert HeuristicExtractor().extract([]) == []
 
 
-def _llm_http(body: dict) -> httpx.Client:
+def _llm_http(body: dict, status_code: int = 200) -> httpx.Client:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json=body)
+        return httpx.Response(status_code, json=body)
 
     return httpx.Client(transport=httpx.MockTransport(handler))
 
@@ -135,6 +135,26 @@ def test_llm_extractor_parses_memories_from_chat_completion() -> None:
     assert candidates[0].memory_type == MemoryType.semantic
     assert candidates[0].importance == 0.8
     assert candidates[0].source_metadata["extractor"] == "llm"
+
+
+def test_llm_extractor_falls_back_to_heuristic_on_http_error() -> None:
+    http = _llm_http({"error": "rate limited"}, status_code=429)
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        http=http,
+    )
+    candidates = extractor.extract(
+        [
+            {
+                "event_type": "message",
+                "payload": {"content": "We prefer pytest over unittest."},
+            }
+        ]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].content == "We prefer pytest over unittest."
+    assert candidates[0].source_metadata["extractor"] == "heuristic"
 
 
 def test_llm_extractor_empty_list_is_success() -> None:

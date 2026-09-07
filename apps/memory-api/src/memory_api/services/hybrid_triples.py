@@ -78,6 +78,7 @@ def enrich_hybrid_triples(
         return [], []
 
     if not payload:
+        logger.warning("Hybrid triple LLM empty after providers; using rules fallback")
         return [], []
 
     return _parse_kv_triples(payload.get("kv_triples")), _parse_graph_triples(

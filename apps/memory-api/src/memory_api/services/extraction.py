@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -9,6 +10,8 @@ import httpx
 
 from memory_api.db.models import MemoryType
 from memory_api.services.llm_json import LlmProvider, complete_json
+
+logger = logging.getLogger(__name__)
 
 _TEXT_KEYS = ("content", "text", "summary", "message")
 
@@ -130,10 +133,12 @@ class LlmExtractor:
             http=self._http,
         )
         if not payload:
+            logger.warning("LLM extract failed; using heuristic fallback")
             return HeuristicExtractor().extract(events)
         try:
             memories = payload.get("memories")
             if not isinstance(memories, list):
+                logger.warning("LLM returned malformed memories payload; using heuristic fallback")
                 return HeuristicExtractor().extract(events)
             candidates: list[Candidate] = []
             for item in memories:
@@ -194,6 +199,7 @@ class LlmExtractor:
                 )
             return candidates
         except Exception:
+            logger.exception("LLM extract failed; using heuristic fallback")
             return HeuristicExtractor().extract(events)
 
 

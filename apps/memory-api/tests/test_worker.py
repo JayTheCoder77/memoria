@@ -187,3 +187,42 @@ def test_worker_waits_until_batch_size_without_session_end() -> None:
     )
     assert created == 0
     assert events._rows[0].status == EventStatus.pending
+
+
+def test_worker_llm_http_error_still_extracts_with_heuristic() -> None:
+    events = InMemoryEventStore()
+    repo = InMemoryMemoryRepository()
+    kv = InMemoryKVStore()
+    org_id = uuid.uuid4()
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer pytest over unittest."},
+    )
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="session_end",
+        payload={},
+    )
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": "rate limited"})
+
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    created = run_once(
+        events=events,
+        repo=repo,
+        embedder=HashEmbedder(),
+        extractor=extractor,
+        batch_size=10,
+        kv=kv,
+    )
+    assert created == 1
+    assert all(row.status == EventStatus.processed for row in events._rows)
+    assert kv.get(org_id, "preference", "pytest") is not None
