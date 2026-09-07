@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
 import httpx
 
-logger = logging.getLogger(__name__)
+from memory_api.services.llm_json import LlmProvider, complete_json
 
-_ENRICH_TIMEOUT_SECONDS = 10.0
+logger = logging.getLogger(__name__)
 
 _LLM_SYSTEM = (
     "Extract structured indexes from one memory. Do not rewrite the memory. "
@@ -56,72 +55,31 @@ def _parse_graph_triples(raw: object) -> list[dict[str, Any]]:
     return triples
 
 
-def _llm_enrich(
-    content: str,
-    *,
-    api_key: str,
-    model: str,
-    base_url: str,
-    http: httpx.Client,
-    http_referer: str,
-    app_title: str,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    response = http.post(
-        f"{base_url.rstrip('/')}/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": http_referer,
-            "X-Title": app_title,
-        },
-        json={
-            "model": model,
-            "temperature": 0,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": _LLM_SYSTEM},
-                {"role": "user", "content": content},
-            ],
-        },
-    )
-    response.raise_for_status()
-    raw = response.json()["choices"][0]["message"]["content"] or "{}"
-    payload = json.loads(raw)
-    if not isinstance(payload, dict):
-        raise ValueError("LLM enrich payload is not an object")
-    return _parse_kv_triples(payload.get("kv_triples")), _parse_graph_triples(
-        payload.get("graph_triples")
-    )
-
-
 def enrich_hybrid_triples(
     content: str,
     *,
-    api_key: str | None = None,
-    model: str | None = None,
+    providers: list[LlmProvider] | None = None,
     http: httpx.Client | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    if not api_key or not content.strip():
+    if not content.strip() or not providers:
         return [], []
 
-    from memory_api.config import settings
+    try:
+        payload = complete_json(
+            [
+                {"role": "system", "content": _LLM_SYSTEM},
+                {"role": "user", "content": content},
+            ],
+            providers=providers,
+            http=http,
+        )
+    except Exception:
+        logger.exception("Hybrid triple LLM failed; using rules fallback")
+        return [], []
 
-    def _call(client: httpx.Client) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        try:
-            return _llm_enrich(
-                content,
-                api_key=api_key,
-                model=model or settings.llm_model,
-                base_url=settings.llm_base_url,
-                http=client,
-                http_referer=settings.openrouter_http_referer,
-                app_title=settings.openrouter_app_title,
-            )
-        except Exception:
-            logger.exception("Hybrid triple LLM failed; using rules fallback")
-            return [], []
+    if not payload:
+        return [], []
 
-    if http is None:
-        with httpx.Client(timeout=_ENRICH_TIMEOUT_SECONDS) as client:
-            return _call(client)
-    return _call(http)
+    return _parse_kv_triples(payload.get("kv_triples")), _parse_graph_triples(
+        payload.get("graph_triples")
+    )

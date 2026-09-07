@@ -13,6 +13,7 @@ from memory_api.main import app
 from memory_api.routers.memories import _org_llm_key
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, embed_text, get_embedder
+from memory_api.services.llm_json import LlmProvider
 from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
 
@@ -538,8 +539,14 @@ def test_remember_llm_enriches_kv_and_graph_when_org_has_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "memory_api.routers.memories._org_llm_key",
-        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+        "memory_api.routers.memories.org_chat_providers",
+        lambda _org, **_: [
+            LlmProvider(
+                api_key="sk-test",
+                base_url="https://openrouter.ai/api/v1",
+                model="openai/gpt-4o-mini",
+            )
+        ],
     )
     monkeypatch.setattr(
         "memory_api.routers.memories.enrich_hybrid_triples",
@@ -582,8 +589,14 @@ def test_remember_skips_llm_enrich_when_explicit_triples(
         return [], []
 
     monkeypatch.setattr(
-        "memory_api.routers.memories._org_llm_key",
-        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+        "memory_api.routers.memories.org_chat_providers",
+        lambda _org, **_: [
+            LlmProvider(
+                api_key="sk-test",
+                base_url="https://openrouter.ai/api/v1",
+                model="openai/gpt-4o-mini",
+            )
+        ],
     )
     monkeypatch.setattr(
         "memory_api.routers.memories.enrich_hybrid_triples",
@@ -611,8 +624,14 @@ def test_remember_regex_fallback_when_llm_returns_empty(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "memory_api.routers.memories._org_llm_key",
-        lambda _repo, _org_id: ("sk-test", "openai/gpt-4o-mini"),
+        "memory_api.routers.memories.org_chat_providers",
+        lambda _org, **_: [
+            LlmProvider(
+                api_key="sk-test",
+                base_url="https://openrouter.ai/api/v1",
+                model="openai/gpt-4o-mini",
+            )
+        ],
     )
     monkeypatch.setattr(
         "memory_api.routers.memories.enrich_hybrid_triples",

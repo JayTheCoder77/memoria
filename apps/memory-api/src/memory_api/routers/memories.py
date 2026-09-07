@@ -26,6 +26,7 @@ from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.hybrid_search import HybridRetriever, RankedHit
 from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
+from memory_api.services.org_llm import org_chat_providers
 from memory_api.services.secrets import decrypt_secret
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
@@ -82,11 +83,12 @@ def create_memory(
         and not candidate.kv_triples
         and not candidate.graph_triples
     ):
-        api_key, model = _org_llm_key(repo, principal.org_id)
+        session = getattr(repo, "_session", None)
+        org = session.get(Org, principal.org_id) if session is not None else None
+        providers = org_chat_providers(org, timeout=10.0)
         kv_triples, graph_triples = enrich_hybrid_triples(
             body.content,
-            api_key=api_key,
-            model=model,
+            providers=providers,
         )
         if kv_triples or graph_triples:
             candidate = Candidate(
