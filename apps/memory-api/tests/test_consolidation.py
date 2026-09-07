@@ -6,6 +6,7 @@ from memory_api.db.models import MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.services.consolidation import consolidate_session
 from memory_api.services.embedding import HashEmbedder, embed_text
+from memory_api.stores.graph import InMemoryGraphStore
 
 
 def test_consolidation_merges_near_duplicates_in_a_session() -> None:
@@ -37,3 +38,43 @@ def test_consolidation_merges_near_duplicates_in_a_session() -> None:
     assert repo._rows[0].importance == 0.7
     assert "prefer pytest" in repo._rows[0].content
     assert "we prefer pytest" in repo._rows[0].content
+
+
+def test_consolidation_repoints_graph_edges_to_winner() -> None:
+    repo = InMemoryMemoryRepository()
+    graph = InMemoryGraphStore()
+    embedder = HashEmbedder()
+    org_id = uuid.uuid4()
+    vector = embed_text("prefer pytest", embedder=embedder)
+    loser = repo.insert(
+        org_id=org_id,
+        session_id="s1",
+        memory_type=MemoryType.semantic,
+        content="prefer pytest",
+        embedding=vector,
+        importance=0.4,
+        source_metadata={},
+    )
+    winner = repo.insert(
+        org_id=org_id,
+        session_id="s1",
+        memory_type=MemoryType.semantic,
+        content="we prefer pytest in this repo",
+        embedding=list(vector),
+        importance=0.7,
+        source_metadata={},
+    )
+    graph.add_edge(
+        org_id,
+        "user",
+        "prefers",
+        "pytest",
+        memory_id=loser.id,
+    )
+    merged = consolidate_session(
+        repo=repo, org_id=org_id, session_id="s1", graph=graph
+    )
+    assert merged == 1
+    edges = graph.list_edges(org_id)
+    assert len(edges) == 1
+    assert edges[0].memory_id == winner.id

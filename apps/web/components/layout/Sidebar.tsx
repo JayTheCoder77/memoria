@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 const items = [
   { href: "/dashboard", label: "Overview" },
   { href: "/dashboard/memories", label: "Memories" },
+  { href: "/dashboard/facts", label: "Facts" },
+  { href: "/dashboard/graph", label: "Graph" },
   { href: "/dashboard/keys", label: "API Keys" },
   { href: "/dashboard/settings", label: "Settings" },
 ];

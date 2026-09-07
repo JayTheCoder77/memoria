@@ -79,3 +79,17 @@ class NoOpGraphStore:
         as_of: datetime | None = None,
     ) -> dict[uuid.UUID, int]:
         return {}
+
+    def list_edges(
+        self, org_id: uuid.UUID, *, valid_only: bool = True
+    ) -> list[GraphEdge]:
+        return []
+
+    def reassign_memory(
+        self,
+        org_id: uuid.UUID,
+        *,
+        from_memory_id: uuid.UUID,
+        to_memory_id: uuid.UUID,
+    ) -> None:
+        return None

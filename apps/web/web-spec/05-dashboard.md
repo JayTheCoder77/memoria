@@ -5,7 +5,7 @@ pills, stat grids, and mono type aren't just decoration here, they're the right
 tool for showing live system state (key status, latency, memory counts).
 
 ## Layout
-- **Left sidebar** — wordmark, nav items (`Memories`, `API Keys`, `Settings`),
+- Left sidebar — wordmark, nav items (`Memories`, `Facts`, `Graph`, `API Keys`, `Settings`),
   org switcher at top if multi-org is ever needed (not MVP), user avatar/menu
   at bottom
 - **Top bar** — page title, status pill (`● Operational`) top-right, matches
@@ -39,6 +39,15 @@ tool for showing live system state (key status, latency, memory counts).
 - Filter bar: by memory type, by session_id, search by content
 - Row click → detail panel (side sheet): full content, source_metadata (raw
   JSON in a mono code block), access_count, importance score
+
+## Facts page
+- Read-only table of KV facts: fact_type, entity, value, memory id prefix
+- Source: `GET /kv-facts` with the dashboard session token
+
+## Graph page
+- Read-only table of edges: subject, relation, object, valid/invalid badge, confidence
+- Filter: include invalidated (`valid_only=false`)
+- Source: `GET /graph-edges`
 
 ## Settings page
 - Org name, org ID (mono, copyable)

@@ -116,16 +116,19 @@ def recall(
     q: str,
     session_id: str | None = None,
     limit: int = 10,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """Search memories by semantic similarity across the org.
 
-    Omit session_id unless you need to filter one conversation.
+    Omit session_id unless you need to filter one conversation. Optional as_of
+    (ISO datetime) reads historical graph edges.
     """
     return client.recall(
         api_key=_api_key(),
         session_id=_recall_session(session_id),
         q=q,
         limit=limit,
+        as_of=as_of,
     )
 
 

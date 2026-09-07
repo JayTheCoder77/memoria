@@ -395,7 +395,7 @@ This enables “where did the user live in March?” style questions.
 - [x] Keep heuristic extractor as fallback (regex / keyword rules for preferences, decisions, fixes)
 - [x] Make LLM extractor default when org has a key
 - [x] ADD-only policy with graph soft-invalidation + KV upsert handling updates
-- [ ] Improve dedup with optional entity overlap signal
+- [x] Improve dedup with optional entity overlap signal (`cosine ≥ 0.80` + shared KV/graph entity)
 - [x] Cap enforcement per write
 - [x] Low-confidence triple dropping (`MEMORIA_GRAPH_MIN_CONFIDENCE`, default 0.5)
 - [x] Tests for end-to-end write → three-store population
@@ -418,11 +418,11 @@ This enables “where did the user live in March?” style questions.
 
 Additional work:
 
-- [ ] Temporal query polish (`as_of`)
-- [ ] Dashboard read-only views for KV keys and graph edges
-- [ ] Consolidation job awareness of KV/Graph (avoid orphaned secondary rows)
-- [ ] Documentation: hybrid architecture, weight tuning guide, failure modes
-- [ ] Load / quality benchmarks (semantic, fact-lookup, relationship, temporal)
+- [x] Temporal query polish (`as_of`)
+- [x] Dashboard read-only views for KV keys and graph edges
+- [x] Consolidation job awareness of KV/Graph (avoid orphaned secondary rows)
+- [x] Documentation: hybrid architecture, weight tuning guide, failure modes
+- [x] Load / quality benchmarks (semantic, fact-lookup, relationship, temporal)
 
 **Exit criteria:** Guardrails live; observability in place; docs updated; no regressions on core MCP tools.
 

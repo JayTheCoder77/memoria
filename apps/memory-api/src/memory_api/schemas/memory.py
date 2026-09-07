@@ -107,3 +107,30 @@ class MemoryOut(BaseModel):
 class MemorySearchResponse(BaseModel):
     memories: list[MemoryOut]
     timings_ms: dict[str, float] | None = None
+
+
+class KvFactOut(BaseModel):
+    fact_type: str
+    entity: str
+    value: str | None
+    memory_id: uuid.UUID
+    importance: float
+
+
+class KvFactListResponse(BaseModel):
+    facts: list[KvFactOut]
+
+
+class GraphEdgeOut(BaseModel):
+    subject: str
+    relation: str
+    object: str
+    valid: bool
+    valid_from: datetime | None
+    valid_to: datetime | None
+    confidence: float
+    memory_id: uuid.UUID | None
+
+
+class GraphEdgeListResponse(BaseModel):
+    edges: list[GraphEdgeOut]

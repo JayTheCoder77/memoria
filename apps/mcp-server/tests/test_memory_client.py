@@ -94,6 +94,8 @@ def test_recall_update_and_forget_call_expected_routes() -> None:
     assert "session_id" not in seen[0].url.params
     client.recall(api_key="mem_testkey", session_id="s1", q="remember this")
     assert seen[1].url.params["session_id"] == "s1"
+    client.recall(api_key="mem_testkey", q="history", as_of="2026-03-01T00:00:00Z")
+    assert seen[2].url.params["as_of"] == "2026-03-01T00:00:00Z"
     client.update(api_key="mem_testkey", memory_id=memory_id, content="updated")
     client.forget(api_key="mem_testkey", memory_id=memory_id)
     emitted = client.emit(
@@ -104,6 +106,7 @@ def test_recall_update_and_forget_call_expected_routes() -> None:
     )
     assert emitted["status"] == "queued"
     assert [(item.method, item.url.path) for item in seen] == [
+        ("GET", "/memories/search"),
         ("GET", "/memories/search"),
         ("GET", "/memories/search"),
         ("PATCH", f"/memories/{memory_id}"),

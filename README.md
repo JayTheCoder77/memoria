@@ -147,7 +147,7 @@ Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
 | Tool | What it does |
 |---|---|
 | `remember` | Sync write. Deduped. Use when the agent (or you) knows this should persist. |
-| `recall` | Sync search (similarity + recency + importance). |
+| `recall` | Sync search (vector + KV + graph fusion). Optional `as_of` for historical graph edges. |
 | `update` / `forget` | Patch or delete one memory. |
 | `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). MCP instructions tell the agent to emit after user turns; the user should not have to ask. Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later (LLM if the org has an OpenRouter key, else heuristics) into vector + KV + graph. Send `session_end` to flush a short session and start a new write session. |
 
@@ -166,4 +166,6 @@ Set `MEMORIA_CORS_ORIGINS` to the Vercel origin if the browser ever calls the AP
 
 ## Specs
 
-Product and architecture live in `spec/`. Web UI details live in `apps/web/web-spec/`.
+Product and architecture live in `spec/`. Hybrid stores, fusion weights, and
+failure modes are in `spec/03-architecture.md` and `spec/v2-phase5-hardening.md`.
+Web UI details live in `apps/web/web-spec/`.

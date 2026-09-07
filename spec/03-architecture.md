@@ -41,6 +41,10 @@ Graph reads out concurrently (`ThreadPoolExecutor`). Ranking is unchanged.
 `kv`, `graph`, `total`). Set `MEMORIA_ENABLE_KV=false` or
 `MEMORIA_ENABLE_GRAPH=false` to disable each store independently.
 
+Dedup still merges at cosine ≥ `0.92`. A near neighbor (cosine ≥ `0.80`) also
+merges when the candidate shares a KV/graph entity token with that row's
+content. See `spec/v2-phase4-entity-dedup.md`.
+
 `remember` writes the canonical memory first, then fills KV + graph with one
 sync OpenRouter enrich call when the org has a key (10s timeout). Empty result,
 missing key, or enrich failure falls back to regex. Explicit `kv_triples` /
@@ -48,7 +52,27 @@ missing key, or enrich failure falls back to regex. Explicit `kv_triples` /
 `LlmExtractor` when a key is present, then the same three-store fan-out. MCP
 server `instructions` tell the agent to `emit` after user turns. See
 `spec/v2_extension_plan.md`, `spec/v2-phase0-foundations.md`,
-`spec/v2-phase3-fusion.md`, and `spec/v2-llm-hybrid-writes.md`.
+`spec/v2-phase3-fusion.md`, `spec/v2-llm-hybrid-writes.md`, and
+`spec/v2-phase5-hardening.md`.
+
+### Fusion weights
+
+Defaults: relevance `0.6`, importance `0.2`, recency `0.2` (half-life 14 days).
+Raise recency for chat agents, importance for policy facts, relevance for
+search-heavy agents (`MEMORIA_FUSION_WEIGHT_*`). `explain=true` shows the
+breakdown plus `timings_ms`.
+
+### Failure modes
+
+- KV or graph write errors are logged; `remember` still returns the canonical row.
+- Missing OpenRouter key / enrich timeout → regex triples.
+- Graph triples with `confidence` below `MEMORIA_GRAPH_MIN_CONFIDENCE` (0.5) are dropped.
+- `MEMORIA_ENABLE_KV=false` / `MEMORIA_ENABLE_GRAPH=false` restore vector-only search.
+- Consolidation re-points graph `memory_id` to the winner before deleting the loser.
+  KV rows cascade-delete. Forget leaves graph provenance null (`ON DELETE SET NULL`).
+
+Read-only `GET /kv-facts` and `GET /graph-edges` (machine key or dashboard session)
+power the Facts and Graph dashboard pages. MCP `recall` forwards optional `as_of`.
 
 ## Why no cache layer
 A cache was in the original design to absorb repeated-query latency, but it
