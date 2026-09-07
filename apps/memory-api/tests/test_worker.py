@@ -135,7 +135,7 @@ def test_worker_extracts_via_groq_on_session_end() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=httpx.Client(transport=httpx.MockTransport(handler)),

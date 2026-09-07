@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** On remember enrich and emit extraction, try org OpenRouter BYOK, then org Groq BYOK (fixed `llama-3.1-8b-instant`, no model picker), then regex/heuristic.
+**Goal:** On remember enrich and emit extraction, try org OpenRouter BYOK, then org Groq BYOK (fixed `openai/gpt-oss-20b`, no model picker), then regex/heuristic.
 
 **Architecture:** One OpenAI-compatible `complete_json` helper walks an ordered `list[LlmProvider]`. Remember and `LlmExtractor` build that list from the org row. Groq key is stored encrypted on `orgs` like OpenRouter, without a model column. Settings gets a Groq key card only.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Cascade: OpenRouter BYOK → Groq BYOK → regex/heuristic
-- Groq model is never per-org and never an editable Settings field; always `settings.groq_model` (default `llama-3.1-8b-instant`)
+- Groq model is never per-org and never an editable Settings field; always `settings.groq_model` (default `openai/gpt-oss-20b`)
 - No shared platform Groq API key env
 - Search `derive_kv_candidates` / `derive_graph_seeds` unchanged
 - `remember` still returns 201 if LLMs fail
@@ -80,7 +80,7 @@ def test_complete_json_uses_first_successful_provider() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=_client(handler),
@@ -207,7 +207,7 @@ def _one(
 
 **Interfaces:**
 - Produces: `Settings.groq_base_url: str = "https://api.groq.com/openai/v1"`
-- Produces: `Settings.groq_model: str = "llama-3.1-8b-instant"`
+- Produces: `Settings.groq_model: str = "openai/gpt-oss-20b"`
 - Produces: `Org.groq_key_ciphertext`, `Org.groq_key_last4` (no groq model column)
 - Produces: `IdentityRepository.update_org_groq(org, *, ciphertext: str | None, last4: str | None) -> Org`
 
@@ -217,7 +217,7 @@ def _one(
 def test_groq_defaults() -> None:
     s = Settings()
     assert s.groq_base_url == "https://api.groq.com/openai/v1"
-    assert s.groq_model == "llama-3.1-8b-instant"
+    assert s.groq_model == "openai/gpt-oss-20b"
 ```
 
 - [ ] **Step 2: Run — FAIL AttributeError**
@@ -373,7 +373,7 @@ def test_enrich_openrouter_429_then_groq() -> None:
         "I like rust",
         providers=[
             LlmProvider(api_key="or", base_url="https://openrouter.ai/api/v1", model="x"),
-            LlmProvider(api_key="g", base_url="https://api.groq.com/openai/v1", model="llama-3.1-8b-instant"),
+            LlmProvider(api_key="g", base_url="https://api.groq.com/openai/v1", model="openai/gpt-oss-20b"),
         ],
         http=httpx.Client(transport=httpx.MockTransport(handler)),
     )
@@ -460,7 +460,7 @@ Worker: `session_end` + Groq mock 200 with preference memory → `processed` (re
 - Modify: `spec/v2-llm-hybrid-writes.md`, `spec/03-architecture.md`, `README.md` (Settings: paste Groq key; model not selectable)
 
 **Copy (Groq card):**
-“Used when OpenRouter is missing or fails. Model is fixed to llama-3.1-8b-instant. Raw key encrypted; last 4 only.”
+“Used when OpenRouter is missing or fails. Model is fixed to openai/gpt-oss-20b. Raw key encrypted; last 4 only.”
 
 Status line: `configured · …last4` or `not configured`. **No model `<input>`.**
 

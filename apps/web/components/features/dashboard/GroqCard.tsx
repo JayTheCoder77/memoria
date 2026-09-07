@@ -19,7 +19,7 @@ export function GroqCard({ status }: { status: GroqStatus }) {
         Groq · BYOK
       </p>
       <p className="mt-3 text-sm text-text-secondary">
-        Used when OpenRouter is missing or fails. Model is fixed to llama-3.1-8b-instant.
+        Used when OpenRouter is missing or fails. Model is fixed to openai/gpt-oss-20b.
         Raw key encrypted; last 4 only.
       </p>
       <p className="mt-2 font-mono text-xs text-text-secondary">

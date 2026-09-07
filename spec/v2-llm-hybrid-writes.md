@@ -2,7 +2,7 @@
 
 Remember stays a sync save of caller text. KV and graph indexes are filled by
 an LLM cascade when the org has keys: **OpenRouter BYOK**, then **Groq BYOK**
-(fixed `llama-3.1-8b-instant`, no model picker), then **regex/heuristic
+(fixed `openai/gpt-oss-20b`, no model picker), then **regex/heuristic
 fallback**. Missing Groq key skips Groq. Emit is unchanged on the API (queue →
 worker → same three stores); the worker uses the same cascade. MCP
 **instructions** tell the agent to `emit` conversation turns so the user does

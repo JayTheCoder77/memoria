@@ -30,7 +30,7 @@ def test_complete_json_uses_first_successful_provider() -> None:
             LlmProvider(
                 api_key="g",
                 base_url="https://api.groq.com/openai/v1",
-                model="llama-3.1-8b-instant",
+                model="openai/gpt-oss-20b",
             ),
         ],
         http=_client(handler),

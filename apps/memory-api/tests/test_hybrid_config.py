@@ -33,4 +33,4 @@ def test_fusion_weights_match_current_scoring_defaults() -> None:
 def test_groq_defaults() -> None:
     s = Settings()
     assert s.groq_base_url == "https://api.groq.com/openai/v1"
-    assert s.groq_model == "llama-3.1-8b-instant"
+    assert s.groq_model == "openai/gpt-oss-20b"

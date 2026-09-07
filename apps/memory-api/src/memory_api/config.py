@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     fusion_weight_recency: float = 0.2
     recency_halflife_days: float = 14.0
     groq_base_url: str = "https://api.groq.com/openai/v1"
-    groq_model: str = "llama-3.1-8b-instant"
+    groq_model: str = "openai/gpt-oss-20b"
 
 
 settings = Settings()
