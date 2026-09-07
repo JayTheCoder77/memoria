@@ -245,6 +245,43 @@ class InMemoryGraphStore:
                         frontier.append((next_key, edge_hop))
         return result
 
+    def list_edges(
+        self, org_id: uuid.UUID, *, valid_only: bool = True
+    ) -> list[GraphEdge]:
+        rows = [edge for edge in self._edges if edge.org_id == org_id]
+        if valid_only:
+            rows = [edge for edge in rows if edge.valid]
+        return rows
+
+    def reassign_memory(
+        self,
+        org_id: uuid.UUID,
+        *,
+        from_memory_id: uuid.UUID,
+        to_memory_id: uuid.UUID,
+    ) -> None:
+        updated: list[GraphEdge] = []
+        for edge in self._edges:
+            if edge.org_id == org_id and edge.memory_id == from_memory_id:
+                updated.append(
+                    GraphEdge(
+                        org_id=edge.org_id,
+                        subject_key=edge.subject_key,
+                        relation=edge.relation,
+                        object_key=edge.object_key,
+                        memory_id=to_memory_id,
+                        valid=edge.valid,
+                        valid_from=edge.valid_from,
+                        valid_to=edge.valid_to,
+                        confidence=edge.confidence,
+                        properties=edge.properties,
+                        id=edge.id,
+                    )
+                )
+            else:
+                updated.append(edge)
+        self._edges = updated
+
 
 def _as_dataclass(
     row: GraphEdgeRow,
@@ -464,3 +501,28 @@ class PostgresGraphStore:
                         visited.add(next_key)
                         frontier.append((next_key, edge_hop))
         return result
+
+    def list_edges(
+        self, org_id: uuid.UUID, *, valid_only: bool = True
+    ) -> list[GraphEdge]:
+        rows = self._load_edges(org_id)
+        if valid_only:
+            rows = [edge for edge in rows if edge.valid]
+        return rows
+
+    def reassign_memory(
+        self,
+        org_id: uuid.UUID,
+        *,
+        from_memory_id: uuid.UUID,
+        to_memory_id: uuid.UUID,
+    ) -> None:
+        rows = self._session.scalars(
+            select(GraphEdgeRow).where(
+                GraphEdgeRow.org_id == org_id,
+                GraphEdgeRow.memory_id == from_memory_id,
+            )
+        ).all()
+        for row in rows:
+            row.memory_id = to_memory_id
+        self._session.flush()

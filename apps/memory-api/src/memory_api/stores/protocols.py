@@ -84,3 +84,15 @@ class GraphStore(Protocol):
         hops: int = 2,
         as_of: datetime | None = None,
     ) -> dict[uuid.UUID, int]: ...
+
+    def list_edges(
+        self, org_id: uuid.UUID, *, valid_only: bool = True
+    ) -> list[GraphEdge]: ...
+
+    def reassign_memory(
+        self,
+        org_id: uuid.UUID,
+        *,
+        from_memory_id: uuid.UUID,
+        to_memory_id: uuid.UUID,
+    ) -> None: ...

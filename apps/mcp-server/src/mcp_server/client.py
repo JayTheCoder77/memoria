@@ -54,10 +54,13 @@ class MemoryApiClient:
         q: str,
         session_id: str | None = None,
         limit: int = 10,
+        as_of: str | None = None,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {"q": q, "limit": limit}
         if session_id:
             params["session_id"] = session_id
+        if as_of:
+            params["as_of"] = as_of
         response = self._http.get(
             "/memories/search",
             headers=self._headers(api_key),

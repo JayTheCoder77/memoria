@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from memory_api.config import settings
-from memory_api.routers import api_keys, auth, events, health, memories
+from memory_api.routers import api_keys, auth, events, health, indexes, memories
 from memory_api.services.embedding import get_embedder
 from memory_api.worker import tick
 
@@ -57,3 +57,4 @@ app.include_router(auth.router)
 app.include_router(api_keys.router)
 app.include_router(events.router)
 app.include_router(memories.router)
+app.include_router(indexes.router)

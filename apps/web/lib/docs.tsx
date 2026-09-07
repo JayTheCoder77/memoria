@@ -312,6 +312,12 @@ export function docsPages(): Record<string, DocsPage> {
               {verb("GET")} /memories
             </p>
             <p>
+              {verb("GET")} /kv-facts
+            </p>
+            <p>
+              {verb("GET")} /graph-edges
+            </p>
+            <p>
               {verb("PATCH")} /memories/{"{id}"}
             </p>
             <p>

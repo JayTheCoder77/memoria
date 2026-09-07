@@ -20,6 +20,25 @@ export type MemoryRow = {
   source_metadata: Record<string, unknown>;
 };
 
+export type KvFactRow = {
+  fact_type: string;
+  entity: string;
+  value: string | null;
+  memory_id: string;
+  importance: number;
+};
+
+export type GraphEdgeRow = {
+  subject: string;
+  relation: string;
+  object: string;
+  valid: boolean;
+  valid_from: string | null;
+  valid_to: string | null;
+  confidence: number;
+  memory_id: string | null;
+};
+
 export type OpenRouterStatus = {
   configured: boolean;
   last4: string | null;
@@ -63,6 +82,26 @@ export async function listMemories(
   if (!response.ok) return [];
   const payload = (await response.json()) as { memories: MemoryRow[] };
   return payload.memories;
+}
+
+export async function listKvFacts(token: string): Promise<KvFactRow[]> {
+  const response = await apiFetch("/kv-facts", token);
+  if (!response.ok) return [];
+  const payload = (await response.json()) as { facts: KvFactRow[] };
+  return payload.facts;
+}
+
+export async function listGraphEdges(
+  token: string,
+  params: { valid_only?: boolean } = {},
+): Promise<GraphEdgeRow[]> {
+  const query = new URLSearchParams();
+  if (params.valid_only === false) query.set("valid_only", "false");
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await apiFetch(`/graph-edges${suffix}`, token);
+  if (!response.ok) return [];
+  const payload = (await response.json()) as { edges: GraphEdgeRow[] };
+  return payload.edges;
 }
 
 export async function getMe(token: string): Promise<MeResponse | null> {

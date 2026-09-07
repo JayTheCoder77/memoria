@@ -945,3 +945,71 @@ def test_search_survives_graph_memory_hops_failure(
         assert search.status_code == 200
         assert search.json()["memories"]
     app.dependency_overrides.clear()
+
+
+def test_list_kv_facts_and_graph_edges_are_org_scoped(
+    client: TestClient, keys: InMemoryApiKeyStore, raw_key: str
+) -> None:
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "We prefer pytest",
+            "kv_triples": [{"fact_type": "preference", "entity": "pytest"}],
+            "graph_triples": [
+                {"subject": "user", "relation": "prefers", "object": "pytest"}
+            ],
+        },
+    )
+    assert created.status_code == 201
+    facts = client.get("/kv-facts", headers=_auth(raw_key))
+    assert facts.status_code == 200
+    assert facts.json()["facts"][0]["entity"] == "pytest"
+    edges = client.get("/graph-edges", headers=_auth(raw_key))
+    assert edges.status_code == 200
+    assert edges.json()["edges"][0]["object"] == "pytest"
+
+    other = generate_api_key()
+    keys.add(org_id=uuid.uuid4(), raw_key=other)
+    foreign_facts = client.get("/kv-facts", headers=_auth(other))
+    foreign_edges = client.get("/graph-edges", headers=_auth(other))
+    assert foreign_facts.json()["facts"] == []
+    assert foreign_edges.json()["edges"] == []
+
+
+def test_graph_edges_valid_only_hides_invalidated(
+    client: TestClient, raw_key: str
+) -> None:
+    first = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "ava lives in Berlin",
+            "graph_triples": [
+                {"subject": "ava", "relation": "lives_in", "object": "berlin"}
+            ],
+        },
+    )
+    second = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "content": "ava lives in Lisbon",
+            "graph_triples": [
+                {"subject": "ava", "relation": "lives_in", "object": "lisbon"}
+            ],
+        },
+    )
+    assert first.status_code == 201
+    assert second.status_code == 201
+    current = client.get("/graph-edges", headers=_auth(raw_key))
+    objects = {edge["object"] for edge in current.json()["edges"]}
+    assert objects == {"lisbon"}
+    history = client.get(
+        "/graph-edges", headers=_auth(raw_key), params={"valid_only": False}
+    )
+    objects = {edge["object"] for edge in history.json()["edges"]}
+    assert objects == {"berlin", "lisbon"}
