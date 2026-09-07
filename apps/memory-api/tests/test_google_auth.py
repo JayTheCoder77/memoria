@@ -89,6 +89,7 @@ def test_auth_me_returns_user_and_org(client: TestClient) -> None:
     assert body["user"]["email"] == "jayant@example.com"
     assert body["org"]["name"].endswith("'s org")
     assert body["openrouter"] == {"configured": False, "last4": None, "model": None}
+    assert body["groq"] == {"configured": False, "last4": None}
 
 
 def test_openrouter_byok_stores_last4_not_raw_key(client: TestClient) -> None:
@@ -112,6 +113,21 @@ def test_openrouter_byok_stores_last4_not_raw_key(client: TestClient) -> None:
     cleared = client.put("/auth/openrouter", json={"api_key": ""})
     assert cleared.status_code == 200
     assert cleared.json()["configured"] is False
+
+
+def test_groq_byok_stores_last4_not_raw_key_and_omits_model(client: TestClient) -> None:
+    login = client.post("/auth/google", json={"id_token": "valid-google-token"})
+    assert login.status_code == 200
+    saved = client.put("/auth/groq", json={"api_key": "gsk_super-secret-zz99"})
+    assert saved.status_code == 200, saved.text
+    body = saved.json()
+    assert body == {"configured": True, "last4": "zz99"}
+    assert "model" not in body
+    assert "super-secret" not in saved.text
+    me = client.get("/auth/me")
+    assert me.json()["groq"] == {"configured": True, "last4": "zz99"}
+    cleared = client.put("/auth/groq", json={"api_key": ""})
+    assert cleared.json() == {"configured": False, "last4": None}
 
 
 def test_session_can_list_memories_without_counting_recall(

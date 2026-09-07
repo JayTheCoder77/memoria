@@ -38,10 +38,20 @@ class OpenRouterUpdate(BaseModel):
     model: str | None = None
 
 
+class GroqOut(BaseModel):
+    configured: bool
+    last4: str | None = None
+
+
+class GroqUpdate(BaseModel):
+    api_key: str | None = None
+
+
 class MeOut(BaseModel):
     user: UserOut
     org: OrgOut
     openrouter: OpenRouterOut
+    groq: GroqOut
 
 
 class GoogleAuthResponse(BaseModel):

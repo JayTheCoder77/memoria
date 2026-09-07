@@ -8,6 +8,8 @@ from memory_api.db.models import Org, User
 from memory_api.schemas.auth import (
     GoogleAuthRequest,
     GoogleAuthResponse,
+    GroqOut,
+    GroqUpdate,
     MeOut,
     OpenRouterOut,
     OpenRouterUpdate,
@@ -56,6 +58,13 @@ def _openrouter_out(org: Org) -> OpenRouterOut:
     )
 
 
+def _groq_out(org: Org) -> GroqOut:
+    return GroqOut(
+        configured=bool(org.groq_key_ciphertext),
+        last4=org.groq_key_last4,
+    )
+
+
 @router.get("/auth/me", response_model=MeOut)
 def me(user: User = Depends(get_session_user)) -> MeOut:
     org = user.org
@@ -63,6 +72,7 @@ def me(user: User = Depends(get_session_user)) -> MeOut:
         user=UserOut.model_validate(user),
         org=OrgOut.model_validate(org),
         openrouter=_openrouter_out(org),
+        groq=_groq_out(org),
     )
 
 
@@ -95,3 +105,28 @@ def update_openrouter(
         model=model,
     )
     return _openrouter_out(updated)
+
+
+@router.put("/auth/groq", response_model=GroqOut)
+def update_groq(
+    body: GroqUpdate,
+    user: User = Depends(get_session_user),
+    identities: IdentityRepository = Depends(get_identity_repository),
+) -> GroqOut:
+    org = user.org
+    ciphertext = org.groq_key_ciphertext
+    last4 = org.groq_key_last4
+    if body.api_key is not None:
+        raw = body.api_key.strip()
+        if raw == "":
+            ciphertext = None
+            last4 = None
+        else:
+            ciphertext = encrypt_secret(raw)
+            last4 = key_last4(raw)
+    updated = identities.update_org_groq(
+        org,
+        ciphertext=ciphertext,
+        last4=last4,
+    )
+    return _groq_out(updated)
