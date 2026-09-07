@@ -55,6 +55,7 @@ export function docsPages(): Record<string, DocsPage> {
         { id: "opencode", label: "OpenCode" },
         { id: "scope", label: "Org vs session" },
         { id: "tools", label: "Tools" },
+        { id: "writes", label: "Writes and fallbacks" },
       ],
       body: (
         <>
@@ -62,8 +63,9 @@ export function docsPages(): Record<string, DocsPage> {
             Memoria is a hosted memory layer behind a stateless MCP adapter that runs on
             your machine. Set <code>MEMORY_API_URL</code> to{" "}
             <code>{hostedMemoryApiUrl}</code>. Create a key in the dashboard, put it in
-            MCP env as <code>MEMORY_API_KEY</code>, then call remember and recall from
-            your harness.
+            MCP env as <code>MEMORY_API_KEY</code>. The adapter tells the agent to{" "}
+            <code>emit</code> conversation turns. Use <code>remember</code> when a fact
+            must persist immediately, and <code>recall</code> to search.
           </p>
           <Callout>
             Put the key in MCP environment variables. Do not paste it into prompts,
@@ -161,8 +163,8 @@ export function docsPages(): Record<string, DocsPage> {
             Five tools. Org comes from the API key. Do not set{" "}
             <code>MEMORY_SESSION_ID</code> in MCP JSON. Writes get an auto session id
             for this harness process; <code>emit(session_end)</code> flushes extraction
-            and starts a new one. <code>recall</code> searches the whole org. Tools never
-            take a key.
+            and starts a new one. <code>recall</code> searches the whole org unless you
+            pass <code>session_id</code>. Tools never take a key.
           </p>
           <table className="w-full text-left text-sm">
             <thead className="font-mono text-xs uppercase text-text-secondary">
@@ -175,40 +177,62 @@ export function docsPages(): Record<string, DocsPage> {
               <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">remember</td>
                 <td className="py-3">
-                  Sync write. Deduped. Use when the agent (or you) knows this should
-                  persist. <code>memory_type</code> is episodic, semantic, or procedural.
+                  Immediate save of the caller text (no rewrite). Deduped. Stores the
+                  canonical memory, then fills KV and graph. Use when you or the agent
+                  are sure a fact must persist now. <code>memory_type</code> is episodic,
+                  semantic, or procedural.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">emit</td>
+                <td className="py-3">
+                  Queue only. Call after user turns; do not wait for the user to ask.
+                  Types: <code>message</code>, <code>tool_call</code>, <code>diff</code>,{" "}
+                  <code>session_end</code>. Noisy reads/greps are skipped. Not every
+                  event becomes a memory. The worker extracts later. Pending in the Event
+                  Buffer until 10 events or <code>session_end</code> is normal.{" "}
+                  <code>session_end</code> flushes the batch and rotates the auto session
+                  id.
                 </td>
               </tr>
               <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">recall</td>
                 <td className="py-3">
-                  Sync search (similarity + recency + importance). Query with{" "}
-                  <code>q</code>. Org-wide unless you pass <code>session_id</code>.
+                  Sync search across vector, KV, and graph, fused by relevance,
+                  importance, and recency. Query with <code>q</code>. Org-wide unless you
+                  pass <code>session_id</code>. Optional <code>as_of</code> (ISO datetime)
+                  reads historical graph edges.
                 </td>
               </tr>
               <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">update</td>
                 <td className="py-3">
                   Patch an existing memory by <code>memory_id</code> (content, importance,
-                  or type).
+                  or type). New content is re-embedded. Does not re-run LLM extraction or
+                  rewrite KV/graph.
                 </td>
               </tr>
               <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">forget</td>
-                <td className="py-3">Delete one memory by <code>memory_id</code>.</td>
-              </tr>
-              <tr className="border-t border-border-subtle align-top">
-                <td className="py-3 pr-4 font-mono text-text-primary">emit</td>
                 <td className="py-3">
-                  Queue a harness event (<code>message</code>, <code>tool_call</code>,{" "}
-                  <code>diff</code>, <code>session_end</code>). Not every emit becomes a
-                  memory. Noisy tools are skipped. The worker extracts later (heuristic,
-                  or your OpenRouter key). Send <code>session_end</code> to flush a short
-                  session and rotate the auto session id.
+                  Delete one memory by <code>memory_id</code>. KV facts for that row are
+                  removed. Graph edges stay; their <code>memory_id</code> is cleared.
                 </td>
               </tr>
             </tbody>
           </table>
+          <h2 id="writes">Writes and fallbacks</h2>
+          <p>
+            Paste keys in dashboard Settings. Extraction tries OpenRouter (your model),
+            then Groq (fixed <code>openai/gpt-oss-20b</code>), then regex/heuristic.
+            Missing Groq skips Groq. Rate limits and HTTP errors still succeed; they
+            fall through. LLM/Groq cannot fail <code>remember</code>.
+          </p>
+          <p>
+            <code>remember</code> enriches KV/graph on that request. <code>emit</code>{" "}
+            only queues; the same cascade runs in the worker. Recall query parsing uses
+            OpenRouter if configured, else regex — not the Groq cascade.
+          </p>
         </>
       ),
     },
@@ -306,6 +330,9 @@ export function docsPages(): Record<string, DocsPage> {
               {verb("POST")} /memories
             </p>
             <p>
+              {verb("POST")} /events
+            </p>
+            <p>
               {verb("GET")} /memories/search
             </p>
             <p>
@@ -345,6 +372,11 @@ export function docsPages(): Record<string, DocsPage> {
                 <td className="py-2 font-mono text-text-primary">q</td>
                 <td className="font-mono">string</td>
                 <td>Recall query text</td>
+              </tr>
+              <tr className="border-t border-border-subtle">
+                <td className="py-2 font-mono text-text-primary">as_of</td>
+                <td className="font-mono">datetime</td>
+                <td>Optional. Historical graph edges on recall/search</td>
               </tr>
               <tr className="border-t border-border-subtle">
                 <td className="py-2 font-mono text-text-primary">token_budget</td>
