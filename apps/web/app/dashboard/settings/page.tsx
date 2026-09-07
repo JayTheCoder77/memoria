@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
+import { GroqCard } from "@/components/features/dashboard/GroqCard";
 import { OpenRouterCard } from "@/components/features/dashboard/OpenRouterCard";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
@@ -37,6 +38,9 @@ export default async function SettingsPage() {
           status={
             me?.openrouter ?? { configured: false, last4: null, model: null }
           }
+        />
+        <GroqCard
+          status={me?.groq ?? { configured: false, last4: null }}
         />
         <Card className="border-danger p-6">
           <p className="font-mono text-xs uppercase tracking-[0.18em] text-danger">

@@ -45,10 +45,16 @@ export type OpenRouterStatus = {
   model: string | null;
 };
 
+export type GroqStatus = {
+  configured: boolean;
+  last4: string | null;
+};
+
 export type MeResponse = {
   user: { id: string; org_id: string; email: string; name: string; google_id: string };
   org: { id: string; name: string };
   openrouter: OpenRouterStatus;
+  groq: GroqStatus;
 };
 
 async function apiFetch(path: string, token: string, init?: RequestInit) {
@@ -123,6 +129,18 @@ export async function saveOpenRouterKey(
     throw new Error("Could not save OpenRouter key");
   }
   return (await response.json()) as OpenRouterStatus;
+}
+
+export async function saveGroqKey(token: string, body: { api_key?: string }) {
+  const response = await apiFetch("/auth/groq", token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error("Could not save Groq key");
+  }
+  return (await response.json()) as GroqStatus;
 }
 
 export async function createApiKeyRequest(token: string) {

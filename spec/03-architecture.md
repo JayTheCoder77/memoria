@@ -45,12 +45,13 @@ Dedup still merges at cosine ≥ `0.92`. A near neighbor (cosine ≥ `0.80`) als
 merges when the candidate shares a KV/graph entity token with that row's
 content. See `spec/v2-phase4-entity-dedup.md`.
 
-`remember` writes the canonical memory first, then fills KV + graph with one
-sync OpenRouter enrich call when the org has a key (10s timeout). Empty result,
-missing key, or enrich failure falls back to regex. Explicit `kv_triples` /
-`graph_triples` skip enrich. `emit` still only queues; the worker uses
-`LlmExtractor` when a key is present, then the same three-store fan-out. MCP
-server `instructions` tell the agent to `emit` after user turns. See
+`remember` writes the canonical memory first, then fills KV + graph with an LLM
+cascade: OpenRouter BYOK (10s), then Groq BYOK (10s, fixed
+`llama-3.1-8b-instant`), then regex/heuristic. Missing Groq key skips Groq.
+Empty result or enrich failure falls through to the next step. Explicit
+`kv_triples` / `graph_triples` skip enrich. `emit` still only queues; the worker
+uses the same cascade, then the same three-store fan-out. MCP server
+`instructions` tell the agent to `emit` after user turns. See
 `spec/v2_extension_plan.md`, `spec/v2-phase0-foundations.md`,
 `spec/v2-phase3-fusion.md`, `spec/v2-llm-hybrid-writes.md`, and
 `spec/v2-phase5-hardening.md`.
@@ -65,7 +66,8 @@ breakdown plus `timings_ms`.
 ### Failure modes
 
 - KV or graph write errors are logged; `remember` still returns the canonical row.
-- Missing OpenRouter key / enrich timeout → regex triples.
+- Missing OpenRouter key / OpenRouter failure → try Groq if configured, else regex triples.
+- Missing Groq key → skip Groq; regex after OpenRouter failure or when no OpenRouter key.
 - Graph triples with `confidence` below `MEMORIA_GRAPH_MIN_CONFIDENCE` (0.5) are dropped.
 - `MEMORIA_ENABLE_KV=false` / `MEMORIA_ENABLE_GRAPH=false` restore vector-only search.
 - Consolidation re-points graph `memory_id` to the winner before deleting the loser.

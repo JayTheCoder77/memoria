@@ -60,8 +60,10 @@ and the same client ID in `apps/memory-api/.env` as `MEMORIA_GOOGLE_CLIENT_ID`.
 
 `MEMORIA_EMBEDDER=hf` uses Hugging Face Inference for MiniLM (needs `MEMORIA_HF_TOKEN`).
 `MEMORIA_EMBEDDER=minilm` runs MiniLM in-process (`uv sync --extra minilm`). Do not mix
-embedders on one database. Extraction uses each org’s OpenRouter key from dashboard
-Settings (BYOK). With no key, the worker uses the heuristic extractor.
+embedders on one database. Extraction uses each org’s keys from dashboard Settings
+(BYOK): OpenRouter first, then Groq as fallback (model fixed to
+`llama-3.1-8b-instant` — not selectable). With no keys, the worker uses the
+heuristic extractor.
 
 Recall latency:
 
@@ -149,7 +151,7 @@ Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
 | `remember` | Sync write. Deduped. Use when the agent (or you) knows this should persist. |
 | `recall` | Sync search (vector + KV + graph fusion). Optional `as_of` for historical graph edges. |
 | `update` / `forget` | Patch or delete one memory. |
-| `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). MCP instructions tell the agent to emit after user turns; the user should not have to ask. Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later (LLM if the org has an OpenRouter key, else heuristics) into vector + KV + graph. Send `session_end` to flush a short session and start a new write session. |
+| `emit` | Queue a raw harness event (`message`, `tool_call`, `diff`, `session_end`). MCP instructions tell the agent to emit after user turns; the user should not have to ask. Not every emit becomes a memory. Noisy tools are skipped. The API worker extracts later (OpenRouter → Groq → heuristics) into vector + KV + graph. Send `session_end` to flush a short session and start a new write session. |
 
 Do not set `MEMORY_SESSION_ID` in MCP JSON. Writes get an auto session id for the harness process; it rotates after `session_end`. `recall` searches the whole org unless you pass `session_id`. Delete `MEMORY_SESSION_ID` from existing configs if it is still `local`.
 
