@@ -28,3 +28,9 @@ def test_fusion_weights_match_current_scoring_defaults() -> None:
     assert s.fusion_weight_importance == 0.2
     assert s.fusion_weight_recency == 0.2
     assert s.recency_halflife_days == 14.0
+
+
+def test_groq_defaults() -> None:
+    s = Settings()
+    assert s.groq_base_url == "https://api.groq.com/openai/v1"
+    assert s.groq_model == "llama-3.1-8b-instant"

@@ -32,6 +32,14 @@ class IdentityRepository(Protocol):
         model: str | None,
     ) -> Org: ...
 
+    def update_org_groq(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+    ) -> Org: ...
+
 
 class InMemoryIdentityRepository:
     def __init__(self) -> None:
@@ -96,6 +104,17 @@ class InMemoryIdentityRepository:
         org.openrouter_model = model
         return org
 
+    def update_org_groq(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+    ) -> Org:
+        org.groq_key_ciphertext = ciphertext
+        org.groq_key_last4 = last4
+        return org
+
 
 class PostgresIdentityRepository:
     def __init__(self, session: Session) -> None:
@@ -157,5 +176,17 @@ class PostgresIdentityRepository:
         org.openrouter_key_ciphertext = ciphertext
         org.openrouter_key_last4 = last4
         org.openrouter_model = model
+        self._session.flush()
+        return org
+
+    def update_org_groq(
+        self,
+        org: Org,
+        *,
+        ciphertext: str | None,
+        last4: str | None,
+    ) -> Org:
+        org.groq_key_ciphertext = ciphertext
+        org.groq_key_last4 = last4
         self._session.flush()
         return org

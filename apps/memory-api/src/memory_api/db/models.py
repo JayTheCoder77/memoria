@@ -46,6 +46,8 @@ class Org(Base):
     openrouter_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     openrouter_key_last4: Mapped[str | None] = mapped_column(Text, nullable=True)
     openrouter_model: Mapped[str | None] = mapped_column(Text, nullable=True)
+    groq_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
+    groq_key_last4: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     memories: Mapped[list[Memory]] = relationship(back_populates="org")
     users: Mapped[list[User]] = relationship(back_populates="org")
