@@ -8,6 +8,7 @@ from typing import Any, Protocol
 import httpx
 
 from memory_api.db.models import MemoryType
+from memory_api.services.llm_json import LlmProvider, complete_json
 
 _TEXT_KEYS = ("content", "text", "summary", "message")
 
@@ -84,8 +85,9 @@ class LlmExtractor:
     def __init__(
         self,
         *,
-        api_key: str,
-        model: str,
+        providers: list[LlmProvider] | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
         base_url: str | None = None,
         http: httpx.Client | None = None,
         http_referer: str | None = None,
@@ -93,37 +95,42 @@ class LlmExtractor:
     ) -> None:
         from memory_api.config import settings
 
-        self._api_key = api_key
-        self._model = model
-        self._base_url = (base_url or settings.llm_base_url).rstrip("/")
         self._http = http or httpx.Client(timeout=30.0)
-        self._http_referer = http_referer or settings.openrouter_http_referer
-        self._app_title = app_title or settings.openrouter_app_title
+        if providers is None:
+            if not api_key:
+                raise ValueError("api_key or providers required")
+            base = (base_url or settings.llm_base_url).rstrip("/")
+            providers = [
+                LlmProvider(
+                    api_key=api_key,
+                    base_url=base,
+                    model=model or settings.llm_model,
+                    timeout=30.0,
+                    extra_headers={
+                        "HTTP-Referer": http_referer or settings.openrouter_http_referer,
+                        "X-Title": app_title or settings.openrouter_app_title,
+                    },
+                )
+            ]
+        self._providers = providers
+        provider = providers[0]
+        self._api_key = provider.api_key
+        self._model = provider.model
+        self._base_url = provider.base_url
 
     def extract(self, events: list[dict[str, Any]]) -> list[Candidate]:
         if not events:
             return []
-        response = self._http.post(
-            f"{self._base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": self._http_referer,
-                "X-Title": self._app_title,
-            },
-            json={
-                "model": self._model,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": _LLM_SYSTEM},
-                    {"role": "user", "content": json.dumps(events)},
-                ],
-            },
+        payload = complete_json(
+            [
+                {"role": "system", "content": _LLM_SYSTEM},
+                {"role": "user", "content": json.dumps(events)},
+            ],
+            providers=self._providers,
+            http=self._http,
         )
-        response.raise_for_status()
-        raw = response.json()["choices"][0]["message"]["content"] or "{}"
-        payload = json.loads(raw)
+        if not payload:
+            return HeuristicExtractor().extract(events)
         candidates: list[Candidate] = []
         for item in payload.get("memories") or []:
             if not isinstance(item, dict):

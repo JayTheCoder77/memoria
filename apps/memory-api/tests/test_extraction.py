@@ -2,6 +2,7 @@ import httpx
 
 from memory_api.db.models import MemoryType
 from memory_api.services.extraction import HeuristicExtractor, LlmExtractor, get_extractor
+from memory_api.services.llm_json import LlmProvider
 
 
 def test_heuristic_extracts_preferences_and_can_return_nothing() -> None:
@@ -175,3 +176,66 @@ def test_get_extractor_uses_org_openrouter_key() -> None:
     assert extractor._api_key == "sk-or-v1-user"
     assert extractor._model == "anthropic/claude-sonnet-4"
     assert extractor._base_url == "https://openrouter.ai/api/v1"
+
+
+def test_llm_extractor_falls_back_to_groq_then_heuristic() -> None:
+    def groq_ok(request: httpx.Request) -> httpx.Response:
+        if "openrouter" in str(request.url):
+            return httpx.Response(429, json={"error": "rate"})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"memories":[{"content":"Prefer pytest.",'
+                                '"memory_type":"semantic","importance":0.8}]}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    extractor = LlmExtractor(
+        providers=[
+            LlmProvider(api_key="or", base_url="https://openrouter.ai/api/v1", model="x"),
+            LlmProvider(
+                api_key="g",
+                base_url="https://api.groq.com/openai/v1",
+                model="llama-3.1-8b-instant",
+            ),
+        ],
+        http=httpx.Client(transport=httpx.MockTransport(groq_ok)),
+    )
+    candidates = extractor.extract(
+        [{"event_type": "message", "payload": {"content": "We prefer pytest."}}]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].source_metadata["extractor"] == "llm"
+
+    def all_fail(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(429, json={"error": "rate"})
+
+    fallback = LlmExtractor(
+        providers=[
+            LlmProvider(api_key="or", base_url="https://openrouter.ai/api/v1", model="x"),
+            LlmProvider(
+                api_key="g",
+                base_url="https://api.groq.com/openai/v1",
+                model="llama-3.1-8b-instant",
+            ),
+        ],
+        http=httpx.Client(transport=httpx.MockTransport(all_fail)),
+    )
+    candidates = fallback.extract(
+        [
+            {
+                "event_type": "message",
+                "payload": {"content": "We prefer pytest over unittest."},
+            }
+        ]
+    )
+    assert len(candidates) == 1
+    assert candidates[0].source_metadata["extractor"] == "heuristic"

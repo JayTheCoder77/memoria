@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import uuid
 
+import httpx
+
 from memory_api.db.events import InMemoryEventStore
 from memory_api.db.models import EventStatus, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.services.embedding import HashEmbedder
-from memory_api.services.extraction import HeuristicExtractor
+from memory_api.services.extraction import HeuristicExtractor, LlmExtractor
+from memory_api.services.llm_json import LlmProvider
 from memory_api.services.worker import run_once
 from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
@@ -104,6 +107,65 @@ def test_worker_persists_graph_facts_for_extracted_candidates() -> None:
     assert created == 1
     edges = graph.neighbors(org_id, "user", hops=1)
     assert any(e.relation == "lives_in" and e.object_key == "berlin" for e in edges)
+
+
+def test_worker_extracts_via_groq_on_session_end() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "openrouter" in str(request.url):
+            return httpx.Response(429, json={"error": "rate"})
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"memories":[{"content":"Prefer pytest.",'
+                                '"memory_type":"semantic","importance":0.8}]}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    llm = LlmExtractor(
+        providers=[
+            LlmProvider(api_key="or", base_url="https://openrouter.ai/api/v1", model="x"),
+            LlmProvider(
+                api_key="g",
+                base_url="https://api.groq.com/openai/v1",
+                model="llama-3.1-8b-instant",
+            ),
+        ],
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    events = InMemoryEventStore()
+    repo = InMemoryMemoryRepository()
+    org_id = uuid.uuid4()
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer pytest over unittest."},
+    )
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="session_end",
+        payload={},
+    )
+    created = run_once(
+        events=events,
+        repo=repo,
+        embedder=HashEmbedder(),
+        extractor=HeuristicExtractor(),
+        extractor_for_org=lambda _org_id: llm,
+        batch_size=10,
+    )
+    assert created == 1
+    assert repo._rows[0].source_metadata["extractor"] == "llm"
+    assert all(row.status == EventStatus.processed for row in events._rows)
 
 
 def test_worker_waits_until_batch_size_without_session_end() -> None:
