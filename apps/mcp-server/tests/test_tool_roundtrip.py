@@ -5,9 +5,9 @@ import uuid
 
 import httpx
 import pytest
+from memoria_cloud import Memoria
 
 import mcp_server.server as server
-from mcp_server.client import MemoryApiClient
 from mcp_server.server import mcp
 
 
@@ -59,7 +59,7 @@ def test_remember_and_recall_tools_round_trip(monkeypatch: pytest.MonkeyPatch) -
 
     http = httpx.Client(transport=httpx.MockTransport(handler), base_url="http://memory")
     original = server.client
-    server.client = MemoryApiClient(http=http)
+    server.client = Memoria(http=http)
     monkeypatch.setenv("MEMORY_API_KEY", "mem_test")
     try:
         remembered = asyncio.run(

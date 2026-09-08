@@ -9,6 +9,7 @@ The Memory API owns storage and retrieval; the MCP server is a thin adapter.
 - **MCP server** — Python (`apps/mcp-server`)
 - **Web** — Next.js (`apps/web`)
 - **Postgres + pgvector** — local via Docker Compose
+- **REST clients** — Python SDK + CLI (`packages/memoria-cloud-sdk`, `packages/memoria-cloud-cli`) and Node SDK (`packages/memoria-cloud-js`)
 
 ## Prerequisites
 
@@ -47,6 +48,18 @@ From the repo root, `bun run dev` starts Turbo tasks for apps that define a `dev
 ```bash
 cd apps/memory-api
 uv run pytest
+
+cd apps/mcp-server
+uv run pytest
+
+cd packages/memoria-cloud-sdk
+uv run pytest
+
+cd packages/memoria-cloud-cli
+uv run pytest
+
+cd packages/memoria-cloud-js
+bun test
 ```
 
 API tests skip Postgres cases if the database is not running.
@@ -155,6 +168,37 @@ Machine auth is a `mem_...` Bearer token. Put it in the MCP process as
 | `forget` | Delete one memory. KV cascade-deletes; graph `memory_id` is set null. |
 
 Do not set `MEMORY_SESSION_ID` in MCP JSON. Writes get an auto session id for the harness process; it rotates after `session_end`. `recall` searches the whole org unless you pass `session_id`. Delete `MEMORY_SESSION_ID` from existing configs if it is still `local`.
+
+## REST SDKs and CLI
+
+Same `mem_...` key as MCP. Default API URL is `https://memoria-api-jw5g.onrender.com`. Packages are in the repo; they are not published from CI yet.
+
+```bash
+pip install memoria-cloud-sdk
+pip install memoria-cloud-cli   # console script: memoria-cloud
+npm install memoria-cloud-sdk
+```
+
+```python
+from memoria_cloud import Memoria
+
+client = Memoria()  # MEMORY_API_URL / MEMORY_API_KEY
+client.remember(content="We prefer pytest", session_id="s1")
+hits = client.recall(q="pytest")
+```
+
+```ts
+import { Memoria } from "memoria-cloud-sdk";
+
+const client = new Memoria();
+await client.recall({ q: "pytest" });
+```
+
+```bash
+export MEMORY_API_KEY=mem_...
+memoria-cloud recall "pytest"
+memoria-cloud remember "We prefer pytest" --session s1
+```
 
 ## Hosted deploy (free-tier)
 

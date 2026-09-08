@@ -100,6 +100,34 @@ def test_write_then_search_returns_the_same_memory(
     assert hits[0]["content"] == content
 
 
+def test_api_key_can_list_memories(
+    client: TestClient, org_id: uuid.UUID, raw_key: str
+) -> None:
+    content = "listable with a machine key"
+    created = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "s1",
+            "memory_type": "semantic",
+            "content": content,
+        },
+    )
+    assert created.status_code == 201
+
+    listed = client.get(
+        "/memories",
+        headers=_auth(raw_key),
+        params={"session_id": "s1", "memory_type": "semantic"},
+    )
+    assert listed.status_code == 200
+    memories = listed.json()["memories"]
+    assert memories[0]["id"] == created.json()["id"]
+    assert memories[0]["content"] == content
+    assert memories[0]["org_id"] == str(org_id)
+    assert memories[0]["access_count"] == 0
+
+
 def test_search_does_not_return_another_orgs_memories(
     client: TestClient, keys: InMemoryApiKeyStore
 ) -> None:

@@ -1,12 +1,12 @@
 [project]
-name = "mcp-server"
+name = "memoria-cloud-sdk"
 version = "0.1.0"
-description = "MCP adapter for the Memoria Memory API"
+description = "Python client for the Memoria Memory API"
+readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28",
-    "mcp>=1.13",
-    "memoria-cloud-sdk",
+    "pydantic>=2.11",
 ]
 
 [dependency-groups]
@@ -19,19 +19,16 @@ dev = [
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[project.scripts]
-memoria-mcp = "mcp_server.server:main"
-
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcp_server"]
+packages = ["src/memoria_cloud"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
-extend = "../../packages/config/ruff.toml"
+extend = "../config/ruff.toml"
 src = ["src", "tests"]
 
-[tool.uv.sources]
-memoria-cloud-sdk = { path = "../../packages/memoria-cloud-sdk", editable = true }
+[tool.ruff.lint.isort]
+known-first-party = ["memoria_cloud"]
