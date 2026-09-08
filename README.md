@@ -171,12 +171,18 @@ Do not set `MEMORY_SESSION_ID` in MCP JSON. Writes get an auto session id for th
 
 ## REST SDKs and CLI
 
-Same `mem_...` key as MCP. Default API URL is `https://memoria-api-jw5g.onrender.com`. Packages are in the repo; they are not published from CI yet.
+Same `mem_...` key as MCP. Default API URL is `https://memoria-api-jw5g.onrender.com`.
+Published as `memoria-cloud-sdk` on [PyPI](https://pypi.org/project/memoria-cloud-sdk/)
+and [npm](https://www.npmjs.com/package/memoria-cloud-sdk), and `memoria-cloud-cli`
+on [PyPI](https://pypi.org/project/memoria-cloud-cli/).
+
+`q` is the search question in plain language (not SQL). `session_id` is a label you
+choose for a chat or project; omit it on recall to search the whole org.
 
 ```bash
 pip install memoria-cloud-sdk
 pip install memoria-cloud-cli   # console script: memoria-cloud
-npm install memoria-cloud-sdk
+npm install memoria-cloud-sdk   # or: bun add memoria-cloud-sdk
 ```
 
 ```python
@@ -184,21 +190,23 @@ from memoria_cloud import Memoria
 
 client = Memoria()  # MEMORY_API_URL / MEMORY_API_KEY
 client.remember(content="We prefer pytest", session_id="s1")
-hits = client.recall(q="pytest")
+hits = client.recall(q="what test runner do we use?")
 ```
 
 ```ts
 import { Memoria } from "memoria-cloud-sdk";
 
 const client = new Memoria();
-await client.recall({ q: "pytest" });
+await client.recall({ q: "what test runner do we use?" });
 ```
 
 ```bash
 export MEMORY_API_KEY=mem_...
-memoria-cloud recall "pytest"
+memoria-cloud recall "what test runner do we use?"
 memoria-cloud remember "We prefer pytest" --session s1
 ```
+
+Field-by-field usage is in the website docs: `/docs/sdk` and `/docs/cli`.
 
 ## Hosted deploy (free-tier)
 

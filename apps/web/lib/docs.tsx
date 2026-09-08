@@ -242,7 +242,10 @@ export function docsPages(): Record<string, DocsPage> {
           </p>
           <h2 id="clients">SDK and CLI</h2>
           <p>
-            For Python or Node outside a harness, skip MCP. Same key, same API. See{" "}
+            For Python or Node outside a harness, skip MCP. Same key, same API.{" "}
+            <code>pip install memoria-cloud-sdk</code> /{" "}
+            <code>npm install memoria-cloud-sdk</code>, or{" "}
+            <code>pip install memoria-cloud-cli</code>. See{" "}
             <a href="/docs/sdk">Python and Node SDKs</a> and the{" "}
             <a href="/docs/cli">CLI</a>.
           </p>
@@ -283,6 +286,7 @@ export function docsPages(): Record<string, DocsPage> {
       headings: [
         { id: "install", label: "Install" },
         { id: "auth-env", label: "Auth and env" },
+        { id: "fields", label: "What the fields mean" },
         { id: "python", label: "Python" },
         { id: "node", label: "Node" },
         { id: "surface", label: "Methods" },
@@ -291,42 +295,159 @@ export function docsPages(): Record<string, DocsPage> {
         <>
           <p>
             Typed HTTP clients for the Memory API. Same <code>mem_...</code> key as MCP.
-            Default base URL is <code>{hostedMemoryApiUrl}</code>. Package names:{" "}
-            <code>memoria-cloud-sdk</code> on PyPI and npm.
+            Default base URL is <code>{hostedMemoryApiUrl}</code>. Published as{" "}
+            <code>memoria-cloud-sdk</code> on{" "}
+            <a href="https://pypi.org/project/memoria-cloud-sdk/">PyPI</a> and{" "}
+            <a href="https://www.npmjs.com/package/memoria-cloud-sdk">npm</a>. Requires
+            Python 3.12+ or Node 24+.
           </p>
-          <Callout>
-            Until PyPI and npm publishes land, install from the GitHub repo as below.
-            The MCP adapter already uses the Python SDK in this repo.
-          </Callout>
           <h2 id="install">Install</h2>
           <p>Python:</p>
+          <CodeBlock language="bash" code={`pip install memoria-cloud-sdk
+# or
+uv add memoria-cloud-sdk`} />
+          <p>Node:</p>
           <CodeBlock
             language="bash"
-            code={`pip install "git+https://github.com/JayTheCoder77/memoria.git#subdirectory=packages/memoria-cloud-sdk"`}
-          />
-          <p>Node (from a clone of this repo, until the npm package is published):</p>
-          <CodeBlock
-            language="bash"
-            code={`cd packages/memoria-cloud-js
-bun install
-bun run build`}
+            code={`npm install memoria-cloud-sdk
+# or
+bun add memoria-cloud-sdk`}
           />
           <h2 id="auth-env">Auth and env</h2>
           <p>
             Constructor args override env. <code>MEMORY_API_KEY</code> is required for
-            writes and search. <code>MEMORY_API_URL</code> is optional.{" "}
-            <code>GET /health</code> does not require a key.
+            writes and search. <code>MEMORY_API_URL</code> is optional (hosted default
+            is used if unset). <code>health()</code> does not need a key.
+          </p>
+          <CodeBlock
+            language="bash"
+            code={`export MEMORY_API_KEY=mem_...
+# optional, defaults to ${hostedMemoryApiUrl}
+export MEMORY_API_URL=${hostedMemoryApiUrl}`}
+          />
+          <h2 id="fields">What the fields mean</h2>
+          <p>
+            Names match the HTTP API. Python uses keyword args; Node uses one object.
+            Nothing here is SQL — <code>q</code> is a search question in plain language.
+          </p>
+          <table className="w-full text-left text-sm">
+            <thead className="font-mono text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="pb-2 pr-4">Field</th>
+                <th className="pb-2">Meaning</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-secondary">
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">content</td>
+                <td className="py-3">
+                  The sentence or paragraph to store. Example:{" "}
+                  <code>We prefer pytest</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">session_id</td>
+                <td className="py-3">
+                  A label you invent for a chat, ticket, or project (for example{" "}
+                  <code>s1</code> or <code>cli-demo</code>). It is not a second tenant —
+                  the org still comes from the API key. Required on{" "}
+                  <code>remember</code> and <code>emit</code>. On{" "}
+                  <code>recall</code>, omit it to search the whole org; pass it only to
+                  narrow to one label.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">memory_type</td>
+                <td className="py-3">
+                  <code>semantic</code> (defaults): preferences and decisions.{" "}
+                  <code>episodic</code>: what happened in a session.{" "}
+                  <code>procedural</code>: steps that worked. See{" "}
+                  <a href="/docs/memory-types">Memory types</a>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">importance</td>
+                <td className="py-3">
+                  Number from 0 to 1. Higher ranks higher in recall. Default{" "}
+                  <code>0.5</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">q</td>
+                <td className="py-3">
+                  On <code>recall</code>: the question you would type into search.
+                  Example: <code>what test runner do we use?</code> or just{" "}
+                  <code>pytest</code>. The API embeds that text and ranks memories. It
+                  is not a keyword filter. On <code>list_memories</code>, <code>q</code>{" "}
+                  is an optional substring filter and does <em>not</em> run semantic
+                  search — use <code>recall</code> when you want ranked matches.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">limit</td>
+                <td className="py-3">
+                  Max memories to return from <code>recall</code>. Default 10.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">as_of</td>
+                <td className="py-3">
+                  Optional ISO timestamp. Recall using graph edges as they were at that
+                  time (historical view). Example:{" "}
+                  <code>2026-09-01T00:00:00Z</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">explain</td>
+                <td className="py-3">
+                  If true, each hit includes <code>score_details</code> (vector vs KV vs
+                  graph). Off by default.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">token_budget</td>
+                <td className="py-3">
+                  Cap how much recall text comes back (rough token count). Default 2048.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">event_type</td>
+                <td className="py-3">
+                  For <code>emit</code>: kind of queued event, usually{" "}
+                  <code>message</code>. Also <code>tool_call</code>, <code>diff</code>,{" "}
+                  <code>session_end</code>. <code>emit</code> only queues;{" "}
+                  <code>remember</code> saves immediately.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            <code>kv_facts</code> / <code>kvFacts</code> lists extracted key–value rows
+            (entity, fact type, value). <code>graph_edges</code> /{" "}
+            <code>graphEdges</code> lists subject–relation–object triples. Both are
+            filled by extraction after remember/emit, not by you on every call.
           </p>
           <h2 id="python">Python</h2>
           <CodeBlock
             language="python"
             code={`from memoria_cloud import Memoria
 
-client = Memoria()  # MEMORY_API_URL / MEMORY_API_KEY
-client.remember(content="We prefer pytest", session_id="s1")
-hits = client.recall(q="pytest")
-for memory in hits.memories:
-    print(memory.content, memory.score)`}
+client = Memoria()  # reads MEMORY_API_KEY / MEMORY_API_URL
+
+# Save a preference. session_id is a label you choose.
+memory = client.remember(
+    content="We prefer pytest",
+    session_id="cli-demo",
+    memory_type="semantic",
+)
+
+# q = the search question. Omit session_id to search the whole org.
+hits = client.recall(q="what test runner do we use?", limit=5)
+for row in hits.memories:
+    print(row.content, row.score)
+
+# List without embedding a query (optional substring via q=).
+listed = client.list_memories(session_id="cli-demo", memory_type="semantic")`}
           />
           <h2 id="node">Node</h2>
           <CodeBlock
@@ -334,7 +455,20 @@ for memory in hits.memories:
             code={`import { Memoria } from "memoria-cloud-sdk";
 
 const client = new Memoria();
-const hits = await client.recall({ q: "pytest" });`}
+
+await client.remember({
+  content: "We prefer pytest",
+  session_id: "cli-demo",
+  memory_type: "semantic",
+});
+
+const hits = await client.recall({
+  q: "what test runner do we use?",
+  limit: 5,
+});
+for (const row of hits.memories) {
+  console.log(row.content, row.score);
+}`}
           />
           <h2 id="surface">Methods</h2>
           <p>
@@ -348,45 +482,56 @@ const hits = await client.recall({ q: "pytest" });`}
             <thead className="font-mono text-xs uppercase text-text-secondary">
               <tr>
                 <th className="pb-2 pr-4">Method</th>
-                <th className="pb-2">HTTP</th>
+                <th className="pb-2">What it does</th>
               </tr>
             </thead>
             <tbody className="text-text-secondary">
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">remember</td>
-                <td className="py-3 font-mono">POST /memories</td>
+                <td className="py-3">
+                  Save text now. Then extract KV/graph. POST /memories.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">recall</td>
-                <td className="py-3 font-mono">GET /memories/search</td>
+                <td className="py-3">
+                  Ranked search from <code>q</code>. GET /memories/search.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">list_memories</td>
-                <td className="py-3 font-mono">GET /memories</td>
+                <td className="py-3">
+                  Browse stored rows. No embedding. GET /memories.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">kv_facts</td>
-                <td className="py-3 font-mono">GET /kv-facts</td>
+                <td className="py-3">Extracted facts for the org. GET /kv-facts.</td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">graph_edges</td>
-                <td className="py-3 font-mono">GET /graph-edges</td>
+                <td className="py-3">Extracted triples. GET /graph-edges.</td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">update</td>
-                <td className="py-3 font-mono">PATCH /memories/{"{id}"}</td>
+                <td className="py-3">
+                  Patch content, importance, or type. Re-embeds. PATCH
+                  /memories/{"{id}"}.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">forget</td>
-                <td className="py-3 font-mono">DELETE /memories/{"{id}"}</td>
+                <td className="py-3">Delete one memory. DELETE /memories/{"{id}"}.</td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">emit</td>
-                <td className="py-3 font-mono">POST /events</td>
+                <td className="py-3">
+                  Queue an event for later extraction. POST /events.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-3 pr-4 font-mono text-text-primary">health</td>
-                <td className="py-3 font-mono">GET /health</td>
+                <td className="py-3">Liveness. GET /health. No API key.</td>
               </tr>
             </tbody>
           </table>
@@ -404,20 +549,22 @@ const hits = await client.recall({ q: "pytest" });`}
       headings: [
         { id: "install", label: "Install" },
         { id: "config", label: "Config" },
+        { id: "fields", label: "Arguments" },
         { id: "commands", label: "Commands" },
       ],
       body: (
         <>
           <p>
             <code>memoria-cloud</code> wraps the Python SDK with Typer and Rich tables.
-            PyPI name is <code>memoria-cloud-cli</code>.
+            Install from{" "}
+            <a href="https://pypi.org/project/memoria-cloud-cli/">PyPI</a> as{" "}
+            <code>memoria-cloud-cli</code> (Python 3.12+). That pulls{" "}
+            <code>memoria-cloud-sdk</code>.
           </p>
           <h2 id="install">Install</h2>
-          <CodeBlock
-            language="bash"
-            code={`pip install "git+https://github.com/JayTheCoder77/memoria.git#subdirectory=packages/memoria-cloud-cli"`}
-          />
-          <p>That pulls <code>memoria-cloud-sdk</code> as a dependency.</p>
+          <CodeBlock language="bash" code={`pip install memoria-cloud-cli
+# or
+uv add memoria-cloud-cli`} />
           <h2 id="config">Config</h2>
           <p>
             Flags win over env, which wins over{" "}
@@ -430,6 +577,84 @@ const hits = await client.recall({ q: "pytest" });`}
 # optional: MEMORY_API_URL, MEMORY_SESSION_ID
 memoria-cloud config --api-key mem_...
 memoria-cloud --url ${hostedMemoryApiUrl} health`}
+          />
+          <h2 id="fields">Arguments</h2>
+          <p>
+            Same ideas as the SDK. The search text is a positional argument named{" "}
+            <code>QUERY</code> in help; it is sent as <code>q</code>.
+          </p>
+          <table className="w-full text-left text-sm">
+            <thead className="font-mono text-xs uppercase text-text-secondary">
+              <tr>
+                <th className="pb-2 pr-4">Arg / flag</th>
+                <th className="pb-2">Meaning</th>
+              </tr>
+            </thead>
+            <tbody className="text-text-secondary">
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">TEXT / QUERY</td>
+                <td className="py-3">
+                  For <code>remember</code>: the sentence to store. For{" "}
+                  <code>recall</code>: the search question in plain language (for
+                  example <code>what test runner do we use?</code>).
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--session</td>
+                <td className="py-3">
+                  Label for a chat or project. Required on remember/emit unless set in
+                  env or config. Optional on recall (omit = whole org).
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--type</td>
+                <td className="py-3">
+                  On remember/update: <code>semantic</code>, <code>episodic</code>, or{" "}
+                  <code>procedural</code>. On emit: event kind, default{" "}
+                  <code>message</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--importance</td>
+                <td className="py-3">0–1 ranking weight. Default 0.5 on remember.</td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--limit</td>
+                <td className="py-3">Max rows on recall/facts/graph. Recall default 10.</td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--as-of</td>
+                <td className="py-3">
+                  ISO time for historical graph on recall. Example{" "}
+                  <code>2026-09-01T00:00:00Z</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">--explain</td>
+                <td className="py-3">Include score breakdown on recall.</td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">-q / --query</td>
+                <td className="py-3">
+                  On <code>list</code> only: substring filter. Not semantic search —
+                  use <code>recall</code> for that.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-3 pr-4 font-mono text-text-primary">ID</td>
+                <td className="py-3">
+                  UUID printed after remember. Pass it to update/forget.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <CodeBlock
+            language="bash"
+            code={`memoria-cloud remember "We prefer pytest" --session cli-demo --type semantic
+memoria-cloud recall "what test runner do we use?" --limit 5
+memoria-cloud list --session cli-demo --type semantic
+memoria-cloud facts
+memoria-cloud graph`}
           />
           <h2 id="commands">Commands</h2>
           <table className="w-full text-left text-sm">
@@ -450,7 +675,7 @@ memoria-cloud --url ${hostedMemoryApiUrl} health`}
               <tr className="border-t border-border-subtle">
                 <td className="py-3 pr-4 font-mono text-text-primary">recall QUERY</td>
                 <td className="py-3">
-                  Search. <code>--limit</code>, <code>--session</code>,{" "}
+                  Ranked search. <code>--limit</code>, <code>--session</code>,{" "}
                   <code>--as-of</code>, <code>--explain</code>.
                 </td>
               </tr>
@@ -591,7 +816,8 @@ memoria-cloud --url ${hostedMemoryApiUrl} health`}
           <p className="mt-4 text-sm text-text-secondary">
             Machine keys (<code>mem_...</code>) work on memories, events, search, list,{" "}
             KV, graph, and health. <code>GET /memories</code> lists without embedding a
-            query. Search is <code>GET /memories/search?q=</code>. Dashboard Google
+            query. Search is <code>GET /memories/search?q=</code> where <code>q</code>{" "}
+            is a natural-language question, not a filter expression. Dashboard Google
             session still works for list, KV, and graph.
           </p>
           <table className="mt-6 w-full text-left text-sm">
@@ -603,28 +829,45 @@ memoria-cloud --url ${hostedMemoryApiUrl} health`}
               </tr>
             </thead>
             <tbody className="text-text-secondary">
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-2 font-mono text-text-primary">session_id</td>
                 <td className="font-mono">string</td>
                 <td>
-                  Optional. Omit on recall for org-wide search. On write, auto-assigned
-                  per harness process unless passed.
+                  Label you invent for a chat or project, not a second tenant. Required
+                  on write. Omit on recall for org-wide search.
                 </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-2 font-mono text-text-primary">q</td>
                 <td className="font-mono">string</td>
-                <td>Recall query text</td>
+                <td>
+                  On search: plain-language question (embedded). Example:{" "}
+                  <code>what test runner do we use?</code>. On list: optional substring
+                  filter, not ranked search.
+                </td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-2 font-mono text-text-primary">memory_type</td>
+                <td className="font-mono">string</td>
+                <td>
+                  <code>semantic</code>, <code>episodic</code>, or{" "}
+                  <code>procedural</code>.
+                </td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-2 font-mono text-text-primary">as_of</td>
                 <td className="font-mono">datetime</td>
-                <td>Optional. Historical graph edges on recall/search</td>
+                <td>Optional ISO time. Historical graph edges on recall/search.</td>
               </tr>
-              <tr className="border-t border-border-subtle">
+              <tr className="border-t border-border-subtle align-top">
                 <td className="py-2 font-mono text-text-primary">token_budget</td>
                 <td className="font-mono">int</td>
-                <td>Truncate recall payload</td>
+                <td>Cap how much recall text is returned. Default 2048.</td>
+              </tr>
+              <tr className="border-t border-border-subtle align-top">
+                <td className="py-2 font-mono text-text-primary">limit</td>
+                <td className="font-mono">int</td>
+                <td>Max hits on recall. Default 10.</td>
               </tr>
             </tbody>
           </table>
