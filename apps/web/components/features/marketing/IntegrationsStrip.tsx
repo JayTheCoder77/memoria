@@ -1,4 +1,12 @@
-const harnesses = ["OpenCode", "Claude Code", "Cursor", "LangGraph", "any MCP client"];
+const harnesses = [
+  "OpenCode",
+  "Claude Code",
+  "Cursor",
+  "LangGraph",
+  "any MCP client",
+  "Python SDK",
+  "Node SDK",
+];
 
 export function IntegrationsStrip() {
   return (

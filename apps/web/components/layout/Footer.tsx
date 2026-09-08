@@ -33,6 +33,12 @@ export function Footer() {
             <Link className="block" href="/docs/auth">
               Authentication
             </Link>
+            <Link className="block" href="/docs/sdk">
+              SDKs
+            </Link>
+            <Link className="block" href="/docs/cli">
+              CLI
+            </Link>
             <Link className="block" href="/docs/api">
               API reference
             </Link>
