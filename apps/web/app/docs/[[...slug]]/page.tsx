@@ -2,6 +2,12 @@ import { notFound } from "next/navigation";
 
 import { docsPages } from "@/lib/docs";
 
+export function generateStaticParams() {
+  return Object.keys(docsPages())
+    .filter((slug) => slug !== "quickstart")
+    .map((slug) => ({ slug: [slug] }));
+}
+
 export default async function DocsPage({
   params,
 }: {

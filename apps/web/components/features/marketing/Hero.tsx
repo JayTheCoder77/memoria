@@ -4,6 +4,9 @@ import { DotGrid } from "@/components/layout/DotGrid";
 const ticker = [
   "Sub-100ms recall",
   "Stateless MCP",
+  "Python SDK",
+  "Node SDK",
+  "CLI",
   "Multi-tenant",
   "Episodic",
   "Semantic",
@@ -24,8 +27,8 @@ export function Hero() {
           Your agent forgets everything. We fixed that.
         </h1>
         <p className="mt-6 max-w-xl text-lg text-text-secondary">
-          Persistent episodic, semantic, and procedural memory over a stateless MCP
-          adapter — recall in under 100ms.
+          Persistent episodic, semantic, and procedural memory over MCP, a REST SDK,
+          or the CLI — recall in under 100ms.
         </p>
         <div className="mt-10 flex flex-wrap gap-4">
           <Button href="/login">Get API Key</Button>

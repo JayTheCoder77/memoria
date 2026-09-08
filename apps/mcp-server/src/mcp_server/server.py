@@ -5,10 +5,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import httpx
 from mcp.server.mcpserver import MCPServer
-
-from mcp_server.client import MemoryApiClient
+from memoria_cloud import Memoria
 
 
 def _load_dotenv() -> None:
@@ -36,8 +34,7 @@ _INSTRUCTIONS = (
 )
 
 mcp = MCPServer("memoria", version="0.1.0", instructions=_INSTRUCTIONS)
-_http = httpx.Client(base_url=os.environ.get("MEMORY_API_URL", "http://127.0.0.1:8000"))
-client = MemoryApiClient(http=_http)
+client = Memoria(base_url=os.environ.get("MEMORY_API_URL", "http://127.0.0.1:8000"))
 
 
 def _api_key() -> str:
@@ -102,13 +99,13 @@ def remember(
     adapter assigns one for this harness process and rotates it after
     emit(session_end). Do not put a session id in MCP JSON.
     """
+    _api_key()
     return client.remember(
-        api_key=_api_key(),
         session_id=_write_session(session_id),
         memory_type=memory_type,
         content=content,
         importance=importance,
-    )
+    ).model_dump(mode="json")
 
 
 @mcp.tool()
@@ -123,13 +120,13 @@ def recall(
     Omit session_id unless you need to filter one conversation. Optional as_of
     (ISO datetime) reads historical graph edges.
     """
+    _api_key()
     return client.recall(
-        api_key=_api_key(),
         session_id=_recall_session(session_id),
         q=q,
         limit=limit,
         as_of=as_of,
-    )
+    ).model_dump(mode="json")
 
 
 @mcp.tool()
@@ -140,19 +137,20 @@ def update(
     memory_type: str | None = None,
 ) -> dict[str, Any]:
     """Update an existing memory."""
+    _api_key()
     return client.update(
-        api_key=_api_key(),
-        memory_id=memory_id,
+        memory_id,
         content=content,
         importance=importance,
         memory_type=memory_type,
-    )
+    ).model_dump(mode="json")
 
 
 @mcp.tool()
 def forget(memory_id: str) -> dict[str, str]:
     """Delete a memory."""
-    client.forget(api_key=_api_key(), memory_id=memory_id)
+    _api_key()
+    client.forget(memory_id)
     return {"status": "forgotten", "memory_id": memory_id}
 
 
@@ -169,14 +167,14 @@ def emit(
     object (use content for text). Omit session_id. session_end flushes the
     worker batch and starts a new auto session id.
     """
+    _api_key()
     used_explicit = bool((session_id or "").strip())
     sid = _write_session(session_id)
     result = client.emit(
-        api_key=_api_key(),
         session_id=sid,
         event_type=event_type,
         payload=payload or {},
-    )
+    ).model_dump(mode="json")
     if event_type == "session_end":
         _rotate_auto_session(used_explicit=used_explicit)
     return result

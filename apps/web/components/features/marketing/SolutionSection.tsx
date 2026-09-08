@@ -16,8 +16,8 @@ export function SolutionSection() {
             to a token budget.
           </p>
           <ol className="mt-8 space-y-3 font-mono text-xs text-text-secondary">
-            <li>01  Harness (Cursor, Claude Code, any MCP client)</li>
-            <li>02  Stateless MCP adapter</li>
+            <li>01  Harness, SDK, or CLI</li>
+            <li>02  Stateless MCP adapter (optional)</li>
             <li>03  Memory API (auth, scoring, extraction)</li>
             <li>04  Postgres + pgvector</li>
           </ol>

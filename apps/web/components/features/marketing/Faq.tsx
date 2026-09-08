@@ -15,7 +15,7 @@ const faqs = [
   },
   {
     q: "Which harnesses work?",
-    a: "Any MCP client. Docs cover Cursor, Claude Code, and OpenCode. LangGraph and custom agents use the same tools.",
+    a: "Any MCP client (Cursor, Claude Code, OpenCode) plus Python and Node HTTP SDKs and a memoria-cloud CLI. Same mem_ key.",
   },
   {
     q: "How is data isolated?",
@@ -27,7 +27,7 @@ const faqs = [
   },
   {
     q: "Google OAuth vs API keys?",
-    a: "Google is for humans on the dashboard. API keys are for machines. The MCP server never stores a user session.",
+    a: "Google is for humans on the dashboard. API keys are for machines: MCP, the SDKs, and the CLI. None of those store a user session.",
   },
 ];
 

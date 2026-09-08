@@ -18,8 +18,8 @@ const items = [
   },
   {
     n: "04",
-    title: "MCP-native",
-    body: "remember, recall, update, forget, emit — no session state on the adapter.",
+    title: "MCP and REST",
+    body: "Harnesses use MCP. Scripts use the Python or Node SDK or the CLI. Same remember / recall / emit contract.",
   },
   {
     n: "05",

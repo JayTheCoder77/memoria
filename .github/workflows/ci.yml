@@ -33,3 +33,44 @@ jobs:
       - run: uv sync --group dev
       - run: uv run ruff check src tests
       - run: uv run pytest
+
+  memoria-cloud-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/memoria-cloud-sdk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+
+  memoria-cloud-cli:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/memoria-cloud-cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --group dev
+      - run: uv run ruff check src tests
+      - run: uv run pytest
+
+  memoria-cloud-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.0"
+      - run: bun install
+      - run: bun test
+        working-directory: packages/memoria-cloud-js
+      - run: bun run check-types
+        working-directory: packages/memoria-cloud-js

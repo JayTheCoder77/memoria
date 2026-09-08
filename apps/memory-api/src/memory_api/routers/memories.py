@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from memory_api.auth import get_principal, get_session_user
+from memory_api.auth import get_org_scope, get_principal
 from memory_api.config import settings
 from memory_api.db.deps import get_graph_store, get_kv_store, get_repository, get_vector_store
-from memory_api.db.models import Memory, MemoryType, Org, User
+from memory_api.db.models import Memory, MemoryType, Org
 from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
     MemoryCreate,
@@ -199,11 +199,11 @@ def list_memories(
     session_id: str | None = None,
     memory_type: MemoryType | None = None,
     q: str | None = None,
-    user: User = Depends(get_session_user),
+    org_id: uuid.UUID = Depends(get_org_scope),
     repo: MemoryRepository = Depends(get_repository),
 ) -> MemorySearchResponse:
     rows = repo.list(
-        org_id=user.org_id,
+        org_id=org_id,
         session_id=session_id,
         memory_type=memory_type,
         q=q,

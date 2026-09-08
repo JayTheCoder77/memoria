@@ -7,7 +7,8 @@ export default function PricingPage() {
       <SectionLabel>Pricing</SectionLabel>
       <h1 className="mt-6 text-4xl font-semibold">Free while we dogfood.</h1>
       <p className="mt-4 max-w-xl text-text-secondary">
-        No credit card. Generate a key, point MCP at the API, and start recalling.
+        No credit card. Generate a key, point MCP, the SDK, or the CLI at the API, and
+        start recalling.
       </p>
       <div className="mt-12 grid gap-6 md:grid-cols-2">
         <Card className="p-6">

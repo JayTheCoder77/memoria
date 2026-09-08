@@ -19,7 +19,8 @@ export function ApiKeysList({ keys }: { keys: ApiKeyRow[] }) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-text-secondary">
-          Keys are shown in full once. Store them in the harness MCP config.
+          Keys are shown in full once. Store them in MCP env, the SDK, or{" "}
+          <code className="font-mono text-xs">memoria-cloud config</code>.
         </p>
         <Button
           onClick={async () => {
