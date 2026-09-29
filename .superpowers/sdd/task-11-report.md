@@ -2,7 +2,7 @@
 
 Status: DONE
 
-Commit: see the commit created with subject `feat: normalize entities and version kv facts`
+Commit: `266d6ad` feat: normalize entities and version kv facts
 
 ## What landed
 
