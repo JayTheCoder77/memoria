@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from typing import Any
 
 import structlog
@@ -52,7 +52,7 @@ def _merge_request_context(
     if route is not None:
         event_dict.setdefault("route", route)
     trace_id = _trace_id.get()
-    if "trace_id" not in event_dict:
+    if trace_id is not None or "trace_id" not in event_dict:
         event_dict["trace_id"] = trace_id
     return event_dict
 
@@ -75,6 +75,14 @@ def configure_logging() -> None:
         cache_logger_on_first_use=True,
     )
     _configured = True
+
+
+def set_active_trace_id(trace_id: str) -> Token[str | None]:
+    return _trace_id.set(trace_id)
+
+
+def reset_active_trace_id(token: Token[str | None]) -> None:
+    _trace_id.reset(token)
 
 
 def bind_org_id(org_id: str) -> None:
@@ -120,7 +128,7 @@ def log_request_finished(
     log.info(
         "request_finished",
         request_id=request_id,
-        trace_id=None,
+        trace_id=_trace_id.get(),
         org_id=org_id,
         route=route,
         status_code=status_code,

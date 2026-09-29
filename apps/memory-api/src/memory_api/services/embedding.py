@@ -8,6 +8,8 @@ from typing import Protocol
 
 import httpx
 
+from memory_api.observability.tracing import start_span
+
 EMBEDDING_DIM = 384
 _HF_ROUTER = "https://router.huggingface.co/hf-inference/models"
 
@@ -129,4 +131,5 @@ def get_embedder() -> Embedder:
 def embed_text(text: str, embedder: Embedder | None = None) -> list[float]:
     if embedder is None:
         embedder = get_embedder()
-    return embedder.embed(text)
+    with start_span("embed", embedder=type(embedder).__name__):
+        return embedder.embed(text)

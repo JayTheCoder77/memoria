@@ -10,6 +10,7 @@ from datetime import datetime
 from memory_api.config import settings
 from memory_api.db.models import Memory
 from memory_api.db.repository import MemoryRepository, PostgresMemoryRepository
+from memory_api.observability.tracing import start_span
 from memory_api.services.embedding import Embedder, embed_text
 from memory_api.services.graph_seeds import derive_graph_seeds
 from memory_api.services.kv_candidates import derive_kv_candidates
@@ -61,6 +62,15 @@ class HybridSearchResult:
 
 def _elapsed_ms(started: float) -> float:
     return (time.perf_counter() - started) * 1000.0
+
+
+def _store_span_attributes(
+    org_id: uuid.UUID, store: str, model: str | None
+) -> dict[str, str]:
+    attributes = {"org_id": str(org_id), "store": store}
+    if model:
+        attributes["model"] = model
+    return attributes
 
 
 def _graph_score(graph_hops: int | None) -> float:
@@ -222,28 +232,29 @@ class HybridRetriever:
         limit: int,
     ) -> tuple[list[ScoredMemory], float]:
         started = time.perf_counter()
-        try:
-            store = self._vector
-            session = None
-            if self._vector_is_postgres():
-                from memory_api.db.session import SessionLocal
-
-                session = SessionLocal()
-                store = PostgresVectorStore(PostgresMemoryRepository(session))
+        with start_span("vector_search", org_id=str(org_id), store="vector"):
             try:
-                rows = store.search(
-                    org_id,
-                    query_embedding,
-                    session_id=session_id,
-                    limit=limit,
-                )
-            finally:
-                if session is not None:
-                    session.close()
-            return rows, _elapsed_ms(started)
-        except Exception:
-            logger.exception("Vector search failed; using KV/graph results only")
-            return [], _elapsed_ms(started)
+                store = self._vector
+                session = None
+                if self._vector_is_postgres():
+                    from memory_api.db.session import SessionLocal
+
+                    session = SessionLocal()
+                    store = PostgresVectorStore(PostgresMemoryRepository(session))
+                try:
+                    rows = store.search(
+                        org_id,
+                        query_embedding,
+                        session_id=session_id,
+                        limit=limit,
+                    )
+                finally:
+                    if session is not None:
+                        session.close()
+                return rows, _elapsed_ms(started)
+            except Exception:
+                logger.exception("Vector search failed; using KV/graph results only")
+                return [], _elapsed_ms(started)
 
     def _kv_search(
         self,
@@ -255,24 +266,25 @@ class HybridRetriever:
         if not settings.enable_kv:
             return [], 0.0
         started = time.perf_counter()
-        try:
-            candidates = derive_kv_candidates(q, api_key=api_key, model=model)
-            store = self._kv
-            session = None
-            if isinstance(self._kv, PostgresKVStore):
-                from memory_api.db.session import SessionLocal
-
-                session = SessionLocal()
-                store = PostgresKVStore(session)
+        with start_span("kv_search", **_store_span_attributes(org_id, "kv", model)):
             try:
-                facts = store.search_keys(org_id, candidates)
-            finally:
-                if session is not None:
-                    session.close()
-            return facts, _elapsed_ms(started)
-        except Exception:
-            logger.exception("KV search failed; using vector results only")
-            return [], _elapsed_ms(started)
+                candidates = derive_kv_candidates(q, api_key=api_key, model=model)
+                store = self._kv
+                session = None
+                if isinstance(self._kv, PostgresKVStore):
+                    from memory_api.db.session import SessionLocal
+
+                    session = SessionLocal()
+                    store = PostgresKVStore(session)
+                try:
+                    facts = store.search_keys(org_id, candidates)
+                finally:
+                    if session is not None:
+                        session.close()
+                return facts, _elapsed_ms(started)
+            except Exception:
+                logger.exception("KV search failed; using vector results only")
+                return [], _elapsed_ms(started)
 
     def _graph_search(
         self,
@@ -285,21 +297,22 @@ class HybridRetriever:
         if not settings.enable_graph:
             return {}, 0.0
         started = time.perf_counter()
-        try:
-            seeds = derive_graph_seeds(q, api_key=api_key, model=model)
-            store = self._graph
-            session = None
-            if isinstance(self._graph, PostgresGraphStore):
-                from memory_api.db.session import SessionLocal
-
-                session = SessionLocal()
-                store = PostgresGraphStore(session)
+        with start_span("graph_search", **_store_span_attributes(org_id, "graph", model)):
             try:
-                hops_map = store.memory_hops(org_id, seeds, hops=2, as_of=as_of)
-            finally:
-                if session is not None:
-                    session.close()
-            return hops_map, _elapsed_ms(started)
-        except Exception:
-            logger.exception("Graph search failed; using vector/KV results only")
-            return {}, _elapsed_ms(started)
+                seeds = derive_graph_seeds(q, api_key=api_key, model=model)
+                store = self._graph
+                session = None
+                if isinstance(self._graph, PostgresGraphStore):
+                    from memory_api.db.session import SessionLocal
+
+                    session = SessionLocal()
+                    store = PostgresGraphStore(session)
+                try:
+                    hops_map = store.memory_hops(org_id, seeds, hops=2, as_of=as_of)
+                finally:
+                    if session is not None:
+                        session.close()
+                return hops_map, _elapsed_ms(started)
+            except Exception:
+                logger.exception("Graph search failed; using vector/KV results only")
+                return {}, _elapsed_ms(started)

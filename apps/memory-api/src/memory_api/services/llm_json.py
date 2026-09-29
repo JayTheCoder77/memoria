@@ -7,6 +7,8 @@ from typing import Any
 
 import httpx
 
+from memory_api.observability.tracing import start_span
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,7 +31,8 @@ def complete_json(
         if not provider.api_key.strip():
             continue
         try:
-            payload = _one(messages, provider=provider, http=http)
+            with start_span("llm_complete", model=provider.model):
+                payload = _one(messages, provider=provider, http=http)
         except Exception as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
             logger.warning(
