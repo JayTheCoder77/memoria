@@ -63,6 +63,21 @@ def list_kv_facts(
     )
 
 
+@router.delete("/kv-facts", status_code=status.HTTP_204_NO_CONTENT)
+def delete_kv_facts(
+    user_id: str = Query(min_length=1),
+    org_id: uuid.UUID = Depends(get_org_scope),
+    kv: KVStore = Depends(get_kv_store),
+) -> None:
+    scoped_user, _agent_id = _parse_scope(user_id, None)
+    if scoped_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="user_id is required",
+        )
+    kv.delete_for_user(org_id, user_id=scoped_user)
+
+
 @router.get("/graph-edges", response_model=GraphEdgeListResponse)
 def list_graph_edges(
     valid_only: bool = True,
@@ -97,3 +112,18 @@ def list_graph_edges(
             for row in page
         ]
     )
+
+
+@router.delete("/graph", status_code=status.HTTP_204_NO_CONTENT)
+def delete_graph(
+    user_id: str = Query(min_length=1),
+    org_id: uuid.UUID = Depends(get_org_scope),
+    graph: GraphStore = Depends(get_graph_store),
+) -> None:
+    scoped_user, _agent_id = _parse_scope(user_id, None)
+    if scoped_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="user_id is required",
+        )
+    graph.delete_for_user(org_id, user_id=scoped_user)

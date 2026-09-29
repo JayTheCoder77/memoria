@@ -283,6 +283,21 @@ def update_memory(
     return _to_out(memory)
 
 
+@router.delete("/memories", status_code=status.HTTP_204_NO_CONTENT)
+def forget_user_memories(
+    user_id: str = Query(min_length=1),
+    principal: Principal = Depends(get_principal),
+    repo: MemoryRepository = Depends(get_repository),
+) -> None:
+    scoped_user, _agent_id = _parse_scope(user_id, None)
+    if scoped_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="user_id is required",
+        )
+    repo.delete_for_user(org_id=principal.org_id, user_id=scoped_user)
+
+
 @router.delete("/memories/{memory_id}", status_code=status.HTTP_204_NO_CONTENT)
 def forget_memory(
     memory_id: uuid.UUID,

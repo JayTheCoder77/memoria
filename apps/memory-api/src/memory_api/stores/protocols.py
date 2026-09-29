@@ -76,6 +76,8 @@ class KVStore(Protocol):
         entity: str | None = None,
     ) -> list[KVFactHistory]: ...
 
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None: ...
+
 
 class GraphStore(Protocol):
     def upsert_node(
@@ -150,3 +152,5 @@ class GraphStore(Protocol):
         from_memory_id: uuid.UUID,
         to_memory_id: uuid.UUID,
     ) -> None: ...
+
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None: ...

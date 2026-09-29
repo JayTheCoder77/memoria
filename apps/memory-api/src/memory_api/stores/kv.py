@@ -4,7 +4,7 @@ import uuid
 from dataclasses import replace
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -191,6 +191,17 @@ class InMemoryKVStore:
             entity_n = normalize_entity(entity)
             rows = [row for row in rows if row.entity == entity_n]
         return rows
+
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
+        stored = stored_scope_id(user_id)
+        self._rows = {
+            key: row
+            for key, row in self._rows.items()
+            if not (key[0] == org_id and key[1] == stored)
+        }
+        self._history = [
+            row for row in self._history if not (row.org_id == org_id and row.user_id == stored)
+        ]
 
     def _version_value(
         self,
@@ -421,6 +432,19 @@ class PostgresKVStore:
         if entity is not None:
             stmt = stmt.where(KvFactHistoryRow.entity == normalize_entity(entity))
         return [_history_from_row(row) for row in self._session.scalars(stmt)]
+
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
+        stored = stored_scope_id(user_id)
+        self._session.execute(
+            delete(KvFact).where(KvFact.org_id == org_id, KvFact.user_id == stored)
+        )
+        self._session.execute(
+            delete(KvFactHistoryRow).where(
+                KvFactHistoryRow.org_id == org_id,
+                KvFactHistoryRow.user_id == stored,
+            )
+        )
+        self._session.flush()
 
     def _version_value(
         self,

@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, delete, select
 from sqlalchemy.orm import Session
 
 from memory_api.db.models import Memory, MemoryType
@@ -68,6 +68,8 @@ class MemoryRepository(Protocol):
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None: ...
 
     def delete(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> bool: ...
+
+    def delete_for_user(self, *, org_id: uuid.UUID, user_id: str) -> int: ...
 
 
 def search_statement(
@@ -268,6 +270,13 @@ class PostgresMemoryRepository:
         self._session.flush()
         return True
 
+    def delete_for_user(self, *, org_id: uuid.UUID, user_id: str) -> int:
+        result = self._session.execute(
+            delete(Memory).where(Memory.org_id == org_id, Memory.user_id == user_id)
+        )
+        self._session.flush()
+        return int(result.rowcount or 0)
+
 
 class InMemoryMemoryRepository:
     def __init__(self) -> None:
@@ -414,3 +423,9 @@ class InMemoryMemoryRepository:
             return False
         self._rows.remove(memory)
         return True
+
+    def delete_for_user(self, *, org_id: uuid.UUID, user_id: str) -> int:
+        kept = [row for row in self._rows if not (row.org_id == org_id and row.user_id == user_id)]
+        removed = len(self._rows) - len(kept)
+        self._rows = kept
+        return removed

@@ -4,7 +4,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Protocol
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from memory_api.db.models import EventBuffer, EventStatus
@@ -21,6 +21,8 @@ class EventStore(Protocol):
     ) -> EventBuffer: ...
 
     def pending(self, session_id: str) -> list[EventBuffer]: ...
+
+    def pending_count(self, *, org_id: uuid.UUID, session_id: str) -> int: ...
 
     def claim_ready(
         self, batch_size: int, *, group_window_seconds: int = 120
@@ -80,6 +82,16 @@ class InMemoryEventStore:
             for row in self._rows
             if row.session_id == session_id and row.status == EventStatus.pending
         ]
+
+    def pending_count(self, *, org_id: uuid.UUID, session_id: str) -> int:
+        open_statuses = {EventStatus.pending, EventStatus.processing}
+        return sum(
+            1
+            for row in self._rows
+            if row.org_id == org_id
+            and row.session_id == session_id
+            and row.status in open_statuses
+        )
 
     def claim_ready(self, batch_size: int, *, group_window_seconds: int = 120) -> list[EventBuffer]:
         grouped: dict[tuple[uuid.UUID, str], list[EventBuffer]] = {}
@@ -144,6 +156,18 @@ class PostgresEventStore:
                 .order_by(EventBuffer.created_at)
             )
         )
+
+    def pending_count(self, *, org_id: uuid.UUID, session_id: str) -> int:
+        count = self._session.scalar(
+            select(func.count())
+            .select_from(EventBuffer)
+            .where(
+                EventBuffer.org_id == org_id,
+                EventBuffer.session_id == session_id,
+                EventBuffer.status.in_((EventStatus.pending, EventStatus.processing)),
+            )
+        )
+        return int(count or 0)
 
     def claim_ready(self, batch_size: int, *, group_window_seconds: int = 120) -> list[EventBuffer]:
         pending = list(

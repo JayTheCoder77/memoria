@@ -63,6 +63,9 @@ class NoOpKVStore:
     ) -> list[KVFactHistory]:
         return []
 
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
+        return None
+
 
 class NoOpGraphStore:
     def upsert_node(
@@ -143,4 +146,7 @@ class NoOpGraphStore:
         from_memory_id: uuid.UUID,
         to_memory_id: uuid.UUID,
     ) -> None:
+        return None
+
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
         return None

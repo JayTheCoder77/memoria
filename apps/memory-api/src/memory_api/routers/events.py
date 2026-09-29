@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from memory_api.auth import get_principal
 from memory_api.db.deps import get_event_store
@@ -11,6 +12,10 @@ from memory_api.services.api_keys import Principal
 from memory_api.services.ingest import should_enqueue
 
 router = APIRouter()
+
+
+class PendingCount(BaseModel):
+    pending: int
 
 
 @router.post("/events")
@@ -33,3 +38,14 @@ def ingest_event(
         payload=payload,
     )
     return JSONResponse({"status": "queued", "id": str(row.id)}, status_code=202)
+
+
+@router.get("/events/pending", response_model=PendingCount)
+def pending_events(
+    session_id: str = Query(min_length=1),
+    principal: Principal = Depends(get_principal),
+    store: EventStore = Depends(get_event_store),
+) -> PendingCount:
+    return PendingCount(
+        pending=store.pending_count(org_id=principal.org_id, session_id=session_id)
+    )

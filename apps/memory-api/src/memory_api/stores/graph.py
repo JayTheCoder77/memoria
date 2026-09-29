@@ -5,7 +5,7 @@ from collections import deque
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -353,6 +353,19 @@ class InMemoryGraphStore:
                 updated.append(edge)
         self._edges = updated
 
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
+        stored = stored_scope_id(user_id)
+        self._nodes = {
+            key: node
+            for key, node in self._nodes.items()
+            if not (key[0] == org_id and key[1] == stored)
+        }
+        self._edges = [
+            edge
+            for edge in self._edges
+            if not (edge.org_id == org_id and stored_scope_id(edge.user_id) == stored)
+        ]
+
 
 def _as_dataclass(
     row: GraphEdgeRow,
@@ -650,4 +663,29 @@ class PostgresGraphStore:
         ).all()
         for row in rows:
             row.memory_id = to_memory_id
+        self._session.flush()
+
+    def delete_for_user(self, org_id: uuid.UUID, *, user_id: str) -> None:
+        stored = stored_scope_id(user_id)
+        node_ids = list(
+            self._session.scalars(
+                select(GraphNode.id).where(
+                    GraphNode.org_id == org_id,
+                    GraphNode.user_id == stored,
+                )
+            )
+        )
+        if node_ids:
+            self._session.execute(
+                delete(GraphEdgeRow).where(
+                    GraphEdgeRow.org_id == org_id,
+                    or_(
+                        GraphEdgeRow.subject_id.in_(node_ids),
+                        GraphEdgeRow.object_id.in_(node_ids),
+                    ),
+                )
+            )
+            self._session.execute(
+                delete(GraphNode).where(GraphNode.org_id == org_id, GraphNode.user_id == stored)
+            )
         self._session.flush()

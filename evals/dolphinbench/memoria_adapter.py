@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
 from typing import Any, ClassVar
 
 import httpx
+
+_POLL_INTERVAL_SECONDS = 0.2
+_POLL_TIMEOUT_SECONDS = 180.0
 
 
 class MemoriaBenchAdapter:
@@ -18,6 +23,10 @@ class MemoriaBenchAdapter:
         api_key: str | None = None,
         base_url: str | None = None,
         http: httpx.Client | None = None,
+        sleep: Callable[[float], None] | None = None,
+        monotonic: Callable[[], float] | None = None,
+        poll_interval: float = _POLL_INTERVAL_SECONDS,
+        poll_timeout: float = _POLL_TIMEOUT_SECONDS,
     ) -> None:
         scoped_org = str(org_id).strip() if org_id is not None else ""
         if not scoped_org:
@@ -29,6 +38,10 @@ class MemoriaBenchAdapter:
         self.base_url = (base_url or env_url or "http://127.0.0.1:8000").rstrip("/")
         self._owns_http = http is None
         self._http = http or httpx.Client(base_url=self.base_url, timeout=30.0)
+        self._sleep = sleep or time.sleep
+        self._monotonic = monotonic or time.monotonic
+        self._poll_interval = poll_interval
+        self._poll_timeout = poll_timeout
 
     def close(self) -> None:
         if self._owns_http:
@@ -43,15 +56,9 @@ class MemoriaBenchAdapter:
         return {"org_id": self.org_id, **extra}
 
     def reset(self, persona: str) -> None:
-        listed = self._http.get(
-            "/memories",
-            headers=self._headers(),
-            params=self._params(user_id=persona),
-        )
-        listed.raise_for_status()
-        for memory in listed.json().get("memories", []):
+        for path in ("/memories", "/kv-facts", "/graph"):
             deleted = self._http.delete(
-                f"/memories/{memory['id']}",
+                path,
                 headers=self._headers(),
                 params=self._params(user_id=persona),
             )
@@ -75,16 +82,20 @@ class MemoriaBenchAdapter:
         self._wait_until_drained(persona, session_id)
 
     def _wait_until_drained(self, persona: str, session_id: str) -> None:
+        deadline = self._monotonic() + self._poll_timeout
         while True:
-            drained = self._http.get(
-                "/events/drain",
+            pending = self._http.get(
+                "/events/pending",
                 headers=self._headers(),
                 params=self._params(user_id=persona, session_id=session_id),
             )
-            drained.raise_for_status()
-            payload: dict[str, Any] = drained.json()
-            if payload.get("drained") is True or payload.get("pending") == 0:
+            pending.raise_for_status()
+            payload: dict[str, Any] = pending.json()
+            if payload.get("pending") == 0:
                 return
+            if self._monotonic() >= deadline:
+                raise RuntimeError(f"session {session_id} was not drained")
+            self._sleep(self._poll_interval)
 
     def freeze(self, persona: str) -> None:
         self._frozen.add(persona)
