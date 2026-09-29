@@ -163,6 +163,36 @@ class KvFact(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class KvFactHistory(Base):
+    __tablename__ = "kv_fact_history"
+    __table_args__ = (
+        Index("idx_kv_fact_history_scope", "org_id", "user_id", "fact_type", "entity"),
+        Index(
+            "uq_kv_fact_history_open",
+            "org_id",
+            "user_id",
+            "fact_type",
+            "entity",
+            unique=True,
+            postgresql_where=text("valid_to IS NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
+    )
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    fact_type: Mapped[str] = mapped_column(Text, nullable=False)
+    entity: Mapped[str] = mapped_column(Text, nullable=False)
+    value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    memory_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
+    )
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    valid_to: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class GraphNode(Base):
     __tablename__ = "graph_nodes"
     __table_args__ = (

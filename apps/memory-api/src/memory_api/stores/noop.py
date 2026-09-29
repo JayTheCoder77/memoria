@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from memory_api.stores.types import GraphEdge, KVFact
+from memory_api.stores.types import GraphEdge, KVFact, KVFactHistory
 
 
 class NoOpKVStore:
@@ -51,6 +51,16 @@ class NoOpKVStore:
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> list[KVFact]:
+        return []
+
+    def history(
+        self,
+        org_id: uuid.UUID,
+        *,
+        user_id: str | None = None,
+        fact_type: str | None = None,
+        entity: str | None = None,
+    ) -> list[KVFactHistory]:
         return []
 
 

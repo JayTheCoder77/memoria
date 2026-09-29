@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from memory_api.config import settings
 from memory_api.db.models import Memory
+from memory_api.services.entities import normalize_entity
 from memory_api.services.extraction import Candidate
 from memory_api.services.kv_triples import resolve_kv_triples
 from memory_api.stores.protocols import KVStore
@@ -29,13 +30,16 @@ def persist_kv_facts(
         return
     for triple in triples:
         try:
+            entity = normalize_entity(str(triple["entity"]))
+            if not entity:
+                continue
             if session is not None:
                 with session.begin_nested():
                     kv.put(
                         memory.org_id,
                         memory.id,
                         triple["fact_type"],
-                        triple["entity"],
+                        entity,
                         value=triple.get("value"),
                         importance=memory.importance,
                         user_id=memory.user_id,
@@ -46,7 +50,7 @@ def persist_kv_facts(
                     memory.org_id,
                     memory.id,
                     triple["fact_type"],
-                    triple["entity"],
+                    entity,
                     value=triple.get("value"),
                     importance=memory.importance,
                     user_id=memory.user_id,

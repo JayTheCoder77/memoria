@@ -28,6 +28,19 @@ class KVFact:
 
 
 @dataclass(frozen=True)
+class KVFactHistory:
+    id: uuid.UUID
+    org_id: uuid.UUID
+    user_id: str
+    fact_type: str
+    entity: str
+    value: str | None
+    memory_id: uuid.UUID
+    valid_from: datetime
+    valid_to: datetime | None
+
+
+@dataclass(frozen=True)
 class GraphEdge:
     org_id: uuid.UUID
     subject_key: str

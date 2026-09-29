@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Protocol
 
-from memory_api.stores.types import GraphEdge, KVFact, ScoredMemory
+from memory_api.stores.types import GraphEdge, KVFact, KVFactHistory, ScoredMemory
 
 
 class VectorStore(Protocol):
@@ -65,6 +65,15 @@ class KVStore(Protocol):
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> list[KVFact]: ...
+
+    def history(
+        self,
+        org_id: uuid.UUID,
+        *,
+        user_id: str | None = None,
+        fact_type: str | None = None,
+        entity: str | None = None,
+    ) -> list[KVFactHistory]: ...
 
 
 class GraphStore(Protocol):

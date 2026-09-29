@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from memory_api.db.models import GraphEdgeRow, GraphNode, Memory
+from memory_api.services.entities import normalize_entity
 from memory_api.services.scope import exposed_scope_id, scope_matches, stored_scope_id
 from memory_api.stores.types import GraphEdge
 
@@ -82,7 +83,7 @@ class InMemoryGraphStore:
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> uuid.UUID:
-        key = normalize_graph_token(entity_key)
+        key = normalize_entity(entity_key)
         if not key:
             return uuid.uuid4()
         node_key = self._node_key(org_id, key, user_id, agent_id)
@@ -114,9 +115,9 @@ class InMemoryGraphStore:
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> uuid.UUID:
-        subject_n = normalize_graph_token(subject_key)
+        subject_n = normalize_entity(subject_key)
         relation_n = normalize_graph_token(relation)
-        object_n = normalize_graph_token(object_key)
+        object_n = normalize_entity(object_key)
         if not subject_n or not relation_n or not object_n:
             return uuid.uuid4()
         self.upsert_node(org_id, subject_n, "entity", user_id=user_id, agent_id=agent_id)
@@ -183,7 +184,7 @@ class InMemoryGraphStore:
         user_id: str | None,
         agent_id: str | None,
     ) -> list[GraphEdge]:
-        start = normalize_graph_token(entity_key)
+        start = normalize_entity(entity_key)
         if not start:
             return []
         hops = _clamp_hops(hops)
@@ -266,7 +267,7 @@ class InMemoryGraphStore:
         hops = _clamp_hops(hops)
         result: dict[uuid.UUID, int] = {}
         for entity_key in entity_keys:
-            start = normalize_graph_token(entity_key)
+            start = normalize_entity(entity_key)
             if not start:
                 continue
             visited: set[str] = {start}
@@ -391,7 +392,7 @@ class PostgresGraphStore:
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> uuid.UUID:
-        key = normalize_graph_token(entity_key)
+        key = normalize_entity(entity_key)
         if not key:
             return uuid.uuid4()
         label_stripped = label.strip() or "entity"
@@ -431,9 +432,9 @@ class PostgresGraphStore:
         user_id: str | None = None,
         agent_id: str | None = None,
     ) -> uuid.UUID:
-        subject_n = normalize_graph_token(subject_key)
+        subject_n = normalize_entity(subject_key)
         relation_n = normalize_graph_token(relation)
-        object_n = normalize_graph_token(object_key)
+        object_n = normalize_entity(object_key)
         if not subject_n or not relation_n or not object_n:
             return uuid.uuid4()
         if memory_id is not None:
@@ -533,7 +534,7 @@ class PostgresGraphStore:
         agent_id: str | None = None,
     ) -> list[GraphEdge]:
         all_edges = self._load_edges(org_id, user_id=user_id, agent_id=agent_id)
-        start = normalize_graph_token(entity_key)
+        start = normalize_entity(entity_key)
         if not start:
             return []
         hops = _clamp_hops(hops)
@@ -592,7 +593,7 @@ class PostgresGraphStore:
         hops = _clamp_hops(hops)
         result: dict[uuid.UUID, int] = {}
         for entity_key in entity_keys:
-            start = normalize_graph_token(entity_key)
+            start = normalize_entity(entity_key)
             if not start:
                 continue
             visited: set[str] = {start}
