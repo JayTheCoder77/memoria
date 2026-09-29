@@ -77,6 +77,11 @@ def configure_logging() -> None:
     _configured = True
 
 
+def bind_org_id(org_id: str) -> None:
+    _org_id.set(org_id)
+    structlog.contextvars.bind_contextvars(org_id=org_id)
+
+
 def bind_request(request_id: str, org_id: str | None, route: str) -> None:
     _request_id.set(request_id)
     _org_id.set(org_id)

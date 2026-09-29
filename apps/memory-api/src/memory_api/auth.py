@@ -8,9 +8,15 @@ from memory_api.config import settings
 from memory_api.db.deps import get_api_key_store, get_identity_repository, get_rate_limiter
 from memory_api.db.identity import IdentityRepository
 from memory_api.db.models import User
+from memory_api.observability.logging import bind_org_id
 from memory_api.services.api_keys import ApiKeyStore, AuthError, Principal, authenticate_bearer
 from memory_api.services.rate_limit import RateLimitExceeded, SlidingWindowRateLimiter
 from memory_api.services.session_tokens import SessionTokenError, decode_session_user_id
+
+
+def _stamp_org(request: Request, org_id: uuid.UUID) -> None:
+    request.state.org_id = org_id
+    bind_org_id(str(org_id))
 
 
 def get_principal(
@@ -26,6 +32,7 @@ def get_principal(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",
         ) from exc
+    _stamp_org(request, principal.org_id)
     try:
         limiter.hit(principal.api_key_id)
     except RateLimitExceeded as exc:
@@ -33,7 +40,6 @@ def get_principal(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",
         ) from exc
-    request.state.org_id = principal.org_id
     return principal
 
 
@@ -66,6 +72,7 @@ def get_session_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing session",
         )
+    _stamp_org(request, user.org_id)
     return user
 
 
@@ -87,6 +94,7 @@ def get_org_scope(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Invalid or missing API key",
                 ) from exc
+            _stamp_org(request, principal.org_id)
             try:
                 limiter.hit(principal.api_key_id)
             except RateLimitExceeded as exc:
@@ -94,7 +102,6 @@ def get_org_scope(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Rate limit exceeded",
                 ) from exc
-            request.state.org_id = principal.org_id
             return principal.org_id
     user = get_session_user(
         request=request,
