@@ -4,12 +4,14 @@ import json
 import uuid
 
 import httpx
+import pytest
 import structlog
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
+from memory_api.db.events import InMemoryEventStore
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.observability.logging import configure_logging
 from memory_api.services.embedding import HashEmbedder
@@ -18,6 +20,7 @@ from memory_api.services.llm_json import LlmProvider, complete_json
 from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
 from memory_api.stores.vector import PostgresVectorStore
+from memory_api.worker import tick
 
 QUERY = "where does ava live"
 _ALLOWED_ATTRIBUTES = frozenset({"org_id", "embedder", "model", "store"})
@@ -128,3 +131,63 @@ def test_complete_json_opens_llm_span_without_prompt() -> None:
         assert attributes.get("model") == "openai/gpt-4o-mini"
         assert prompt not in _attribute_text(span)
         assert "sk-test" not in _attribute_text(span)
+
+
+def test_tick_opens_worker_tick_span_without_memory_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exporter = _exporter()
+    sentence = "We prefer the secret notebook over paper."
+    events = InMemoryEventStore()
+    org_id = uuid.uuid4()
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": sentence},
+    )
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="session_end",
+        payload={},
+    )
+
+    class _Session:
+        def get(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def commit(self) -> None:
+            return None
+
+        def rollback(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("memory_api.worker.SessionLocal", lambda: _Session())
+    monkeypatch.setattr("memory_api.worker.PostgresEventStore", lambda _session: events)
+    monkeypatch.setattr(
+        "memory_api.worker.PostgresMemoryRepository",
+        lambda _session: InMemoryMemoryRepository(),
+    )
+    monkeypatch.setattr(
+        "memory_api.worker.PostgresKVStore",
+        lambda _session: InMemoryKVStore(),
+    )
+    monkeypatch.setattr(
+        "memory_api.worker.PostgresGraphStore",
+        lambda _session: InMemoryGraphStore(),
+    )
+
+    created = tick(embedder=HashEmbedder())
+    assert created == 1
+    spans = exporter.get_finished_spans()
+    ticks = [span for span in spans if span.name == "worker_tick"]
+    assert ticks
+    for span in spans:
+        attributes = span.attributes or {}
+        assert set(attributes) <= _ALLOWED_ATTRIBUTES
+        assert all(isinstance(value, str) for value in attributes.values())
+        assert sentence not in _attribute_text(span)
