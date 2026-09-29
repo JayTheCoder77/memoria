@@ -121,6 +121,7 @@ class MemorySearch(BaseModel):
     limit: int = Field(default=10, ge=1, le=100)
     token_budget: int = Field(default=2048, ge=1, le=32_000)
     explain: bool = False
+    rerank: bool = False
     as_of: datetime | None = None
 
     @field_validator("user_id", "agent_id", mode="before")

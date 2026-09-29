@@ -126,6 +126,7 @@ def search(
     limit: int = Query(default=10, ge=1, le=100),
     token_budget: int = Query(default=2048, ge=1, le=32_000),
     explain: bool = False,
+    rerank: bool = False,
     as_of: datetime | None = None,
     user_id: str | None = None,
     agent_id: str | None = None,
@@ -152,6 +153,7 @@ def search(
         as_of=as_of,
         user_id=user_id,
         agent_id=agent_id,
+        rerank=rerank,
     )
 
     def _hit(item: RankedHit) -> MemoryOut:

@@ -14,6 +14,7 @@ from memory_api.observability.tracing import start_span
 from memory_api.services.embedding import Embedder, embed_text
 from memory_api.services.graph_seeds import derive_graph_seeds
 from memory_api.services.kv_candidates import derive_kv_candidates
+from memory_api.services.rerank import RERANK_MODEL, rerank
 from memory_api.services.scope import scope_matches
 from memory_api.services.scoring import (
     fused_relevance,
@@ -97,6 +98,10 @@ def _memory_in_scope(
     return scope_matches(memory.user_id, memory.agent_id, user_id=user_id, agent_id=agent_id)
 
 
+def _rerank_hits(query: str, hits: list[RankedHit], *, limit: int) -> list[RankedHit]:
+    return rerank(query, hits, limit=limit)
+
+
 def _graph_score(graph_hops: int | None) -> float:
     if graph_hops == 1:
         return 1.0
@@ -138,6 +143,7 @@ class HybridRetriever:
         as_of: datetime | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
+        rerank: bool = False,
     ) -> HybridSearchResult:
         total_started = time.perf_counter()
         embed_started = time.perf_counter()
@@ -275,7 +281,11 @@ class HybridRetriever:
                 )
             )
         ranked.sort(key=lambda item: item.score, reverse=True)
-        ranked = ranked[:limit]
+        if rerank:
+            with start_span("rerank", org_id=str(org_id), model=RERANK_MODEL):
+                ranked = _rerank_hits(q, ranked, limit=limit)
+        else:
+            ranked = ranked[:limit]
         hits = truncate_to_token_budget(
             ranked,
             token_budget,
