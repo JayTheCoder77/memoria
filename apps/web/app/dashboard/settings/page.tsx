@@ -1,11 +1,12 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 
+import { ExtractionPolicyCard } from "@/components/features/dashboard/ExtractionPolicyCard";
 import { GroqCard } from "@/components/features/dashboard/GroqCard";
 import { OpenRouterCard } from "@/components/features/dashboard/OpenRouterCard";
 import { PageShell } from "@/components/layout/PageShell";
 import { Card } from "@/components/ui/Card";
-import { getMe } from "@/lib/api-client";
+import { getExtractionPolicy, getMe } from "@/lib/api-client";
 import { authOptions } from "@/lib/auth";
 
 export default async function SettingsPage() {
@@ -14,6 +15,7 @@ export default async function SettingsPage() {
     redirect("/login");
   }
   const me = await getMe(session.memoriaToken);
+  const extractionPolicy = await getExtractionPolicy(session.memoriaToken);
 
   return (
     <PageShell title="Settings">
@@ -34,6 +36,7 @@ export default async function SettingsPage() {
             {me?.user.email ?? session.user?.email}
           </p>
         </Card>
+        <ExtractionPolicyCard policy={extractionPolicy} />
         <OpenRouterCard
           status={
             me?.openrouter ?? { configured: false, last4: null, model: null }

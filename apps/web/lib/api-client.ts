@@ -131,6 +131,34 @@ export async function saveOpenRouterKey(
   return (await response.json()) as OpenRouterStatus;
 }
 
+export type ExtractionPolicy = {
+  instructions: string | null;
+  categories: string[];
+};
+
+export async function getExtractionPolicy(token: string): Promise<ExtractionPolicy> {
+  const response = await apiFetch("/org/extraction-policy", token);
+  if (!response.ok) {
+    return { instructions: null, categories: [] };
+  }
+  return (await response.json()) as ExtractionPolicy;
+}
+
+export async function saveExtractionPolicyRequest(
+  token: string,
+  body: { instructions: string | null; categories: string[] },
+) {
+  const response = await apiFetch("/org/extraction-policy", token, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error("Could not save extraction policy");
+  }
+  return (await response.json()) as ExtractionPolicy;
+}
+
 export async function saveGroqKey(token: string, body: { api_key?: string }) {
   const response = await apiFetch("/auth/groq", token, {
     method: "PUT",

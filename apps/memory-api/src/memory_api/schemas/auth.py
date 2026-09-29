@@ -47,6 +47,16 @@ class GroqUpdate(BaseModel):
     api_key: str | None = None
 
 
+class ExtractionPolicyOut(BaseModel):
+    instructions: str | None = None
+    categories: list[str] = []
+
+
+class ExtractionPolicyUpdate(BaseModel):
+    instructions: str | None = None
+    categories: list[str] = []
+
+
 class MeOut(BaseModel):
     user: UserOut
     org: OrgOut

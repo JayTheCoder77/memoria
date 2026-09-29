@@ -130,6 +130,34 @@ def test_groq_byok_stores_last4_not_raw_key_and_omits_model(client: TestClient) 
     assert cleared.json() == {"configured": False, "last4": None}
 
 
+def test_extraction_policy_saves_instructions_and_categories(client: TestClient) -> None:
+    login = client.post("/auth/google", json={"id_token": "valid-google-token"})
+    assert login.status_code == 200
+    saved = client.put(
+        "/org/extraction-policy",
+        json={
+            "instructions": "Ignore calendar small talk",
+            "categories": ["shipping", " shipping ", ""],
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    assert saved.json() == {
+        "instructions": "Ignore calendar small talk",
+        "categories": ["shipping"],
+    }
+    fetched = client.get("/org/extraction-policy")
+    assert fetched.status_code == 200
+    assert fetched.json()["instructions"] == "Ignore calendar small talk"
+    assert fetched.json()["categories"] == ["shipping"]
+
+    cleared = client.put(
+        "/org/extraction-policy",
+        json={"instructions": "   ", "categories": []},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json() == {"instructions": None, "categories": []}
+
+
 def test_session_can_list_memories_without_counting_recall(
     client: TestClient, identities: InMemoryIdentityRepository
 ) -> None:

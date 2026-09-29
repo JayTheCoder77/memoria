@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/auth";
 import {
   createApiKeyRequest,
   revokeApiKeyRequest,
+  saveExtractionPolicyRequest,
   saveGroqKey,
   saveOpenRouterKey,
 } from "@/lib/api-client";
@@ -44,6 +45,20 @@ export async function saveOpenRouter(apiKey: string, model: string) {
 export async function clearOpenRouter() {
   const token = await requireToken();
   const data = await saveOpenRouterKey(token, { api_key: "" });
+  revalidatePath("/dashboard/settings");
+  return data;
+}
+
+export async function saveExtractionPolicy(instructions: string, categories: string) {
+  const token = await requireToken();
+  const parsed = categories
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  const data = await saveExtractionPolicyRequest(token, {
+    instructions,
+    categories: parsed,
+  });
   revalidatePath("/dashboard/settings");
   return data;
 }

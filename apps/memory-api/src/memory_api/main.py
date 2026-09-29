@@ -13,7 +13,7 @@ from memory_api.config import settings
 from memory_api.observability.logging import configure_logging
 from memory_api.observability.metrics import render_metrics
 from memory_api.observability.middleware import RequestLoggingMiddleware
-from memory_api.routers import api_keys, auth, events, health, indexes, memories, profile
+from memory_api.routers import api_keys, auth, events, health, indexes, memories, org, profile
 from memory_api.services.embedding import get_embedder
 from memory_api.worker import tick
 
@@ -75,3 +75,4 @@ app.include_router(events.router)
 app.include_router(memories.router)
 app.include_router(indexes.router)
 app.include_router(profile.router)
+app.include_router(org.router)

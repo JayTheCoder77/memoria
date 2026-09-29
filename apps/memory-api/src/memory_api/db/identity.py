@@ -40,6 +40,14 @@ class IdentityRepository(Protocol):
         last4: str | None,
     ) -> Org: ...
 
+    def update_org_extraction_policy(
+        self,
+        org: Org,
+        *,
+        instructions: str | None,
+        categories: list[str],
+    ) -> Org: ...
+
 
 class InMemoryIdentityRepository:
     def __init__(self) -> None:
@@ -115,6 +123,17 @@ class InMemoryIdentityRepository:
         org.groq_key_last4 = last4
         return org
 
+    def update_org_extraction_policy(
+        self,
+        org: Org,
+        *,
+        instructions: str | None,
+        categories: list[str],
+    ) -> Org:
+        org.extraction_instructions = instructions
+        org.categories = categories
+        return org
+
 
 class PostgresIdentityRepository:
     def __init__(self, session: Session) -> None:
@@ -188,5 +207,17 @@ class PostgresIdentityRepository:
     ) -> Org:
         org.groq_key_ciphertext = ciphertext
         org.groq_key_last4 = last4
+        self._session.flush()
+        return org
+
+    def update_org_extraction_policy(
+        self,
+        org: Org,
+        *,
+        instructions: str | None,
+        categories: list[str],
+    ) -> Org:
+        org.extraction_instructions = instructions
+        org.categories = list(categories)
         self._session.flush()
         return org

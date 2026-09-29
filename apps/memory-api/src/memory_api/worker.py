@@ -26,9 +26,16 @@ def tick(*, embedder: Embedder | None = None) -> int:
             def extractor_for_org(org_id):
                 org = session.get(Org, org_id)
                 providers = org_chat_providers(org, timeout=30.0)
-                if not providers:
+                if not providers or org is None:
                     return HeuristicExtractor()
-                return LlmExtractor(providers=providers, org_id=org_id)
+                raw_categories = org.categories if isinstance(org.categories, list) else []
+                categories = [item for item in raw_categories if isinstance(item, str)]
+                return LlmExtractor(
+                    providers=providers,
+                    org_id=org_id,
+                    instructions=org.extraction_instructions,
+                    categories=categories,
+                )
 
             kv = PostgresKVStore(session) if settings.enable_kv else NoOpKVStore()
             graph = PostgresGraphStore(session) if settings.enable_graph else NoOpGraphStore()

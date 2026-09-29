@@ -32,6 +32,7 @@ class Candidate:
     source_metadata: dict[str, Any] = field(default_factory=dict)
     kv_triples: list[dict[str, Any]] = field(default_factory=list)
     graph_triples: list[dict[str, Any]] = field(default_factory=list)
+    categories: list[str] = field(default_factory=list)
 
 
 class Extractor(Protocol):
@@ -85,6 +86,30 @@ _LLM_SYSTEM = (
 )
 
 
+def _prompt_appendix(instructions: str | None, categories: list[str]) -> str:
+    lines: list[str] = []
+    text = (instructions or "").strip()
+    if text:
+        lines.append(text)
+    labels = [category.strip() for category in categories if category.strip()]
+    if labels:
+        lines.append("Categories: " + ", ".join(labels))
+        lines.append("Assign zero or more of these categories. Do not invent categories.")
+    return "\n".join(lines)
+
+
+def _kept_categories(raw: object, allowed: list[str]) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    permitted = {category.strip() for category in allowed if category.strip()}
+    kept: list[str] = []
+    for item in raw:
+        label = item.strip() if isinstance(item, str) else ""
+        if label in permitted and label not in kept:
+            kept.append(label)
+    return kept
+
+
 class LlmExtractor:
     def __init__(
         self,
@@ -98,6 +123,8 @@ class LlmExtractor:
         app_title: str | None = None,
         org_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        instructions: str | None = None,
+        categories: list[str] | None = None,
     ) -> None:
         from memory_api.config import settings
 
@@ -125,14 +152,20 @@ class LlmExtractor:
         self._base_url = provider.base_url
         self._org_id = org_id
         self._user_id = user_id
+        self._instructions = instructions
+        self._categories = list(categories or [])
 
     def extract(self, events: list[dict[str, Any]]) -> list[Candidate]:
         if not events:
             return []
+        user_content = json.dumps(events)
+        appendix = _prompt_appendix(self._instructions, self._categories)
+        if appendix:
+            user_content = f"{user_content}\n{appendix}"
         payload = complete_json(
             [
                 {"role": "system", "content": _LLM_SYSTEM},
-                {"role": "user", "content": json.dumps(events)},
+                {"role": "user", "content": user_content},
             ],
             providers=self._providers,
             http=self._http,
@@ -194,14 +227,19 @@ class LlmExtractor:
                         except (TypeError, ValueError):
                             pass
                     graph_triples.append(gentry)
+                categories = _kept_categories(item.get("categories"), self._categories)
+                metadata: dict[str, Any] = {"extractor": "llm"}
+                if categories:
+                    metadata["categories"] = categories
                 candidates.append(
                     Candidate(
                         content=text,
                         memory_type=memory_type,
                         importance=importance,
-                        source_metadata={"extractor": "llm"},
+                        source_metadata=metadata,
                         kv_triples=kv_triples,
                         graph_triples=graph_triples,
+                        categories=categories,
                     )
                 )
             return candidates
@@ -210,7 +248,13 @@ class LlmExtractor:
             return HeuristicExtractor().extract(events)
 
 
-def get_extractor(*, api_key: str | None = None, model: str | None = None) -> Extractor:
+def get_extractor(
+    *,
+    api_key: str | None = None,
+    model: str | None = None,
+    instructions: str | None = None,
+    categories: list[str] | None = None,
+) -> Extractor:
     from memory_api.config import settings
 
     if not api_key:
@@ -219,4 +263,6 @@ def get_extractor(*, api_key: str | None = None, model: str | None = None) -> Ex
         api_key=api_key,
         model=model or settings.llm_model,
         base_url=settings.llm_base_url,
+        instructions=instructions,
+        categories=categories,
     )

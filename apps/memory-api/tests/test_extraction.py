@@ -1,7 +1,14 @@
+import json
+
 import httpx
 
 from memory_api.db.models import MemoryType
-from memory_api.services.extraction import HeuristicExtractor, LlmExtractor, get_extractor
+from memory_api.services.extraction import (
+    _LLM_SYSTEM,
+    HeuristicExtractor,
+    LlmExtractor,
+    get_extractor,
+)
 from memory_api.services.llm_json import LlmProvider
 
 
@@ -238,6 +245,81 @@ def test_get_extractor_uses_org_openrouter_key() -> None:
     assert extractor._api_key == "sk-or-v1-user"
     assert extractor._model == "anthropic/claude-sonnet-4"
     assert extractor._base_url == "https://openrouter.ai/api/v1"
+
+
+def test_llm_extractor_appends_org_instructions_and_drops_unknown_categories() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen["user"] = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"memories":[{"content":"Ship on Friday.",'
+                                '"memory_type":"semantic","importance":0.7,'
+                                '"categories":["shipping","not-allowed"]}]}'
+                            )
+                        }
+                    }
+                ]
+            },
+        )
+
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        instructions="Ignore calendar small talk",
+        categories=["shipping"],
+    )
+    candidates = extractor.extract(
+        [{"event_type": "message", "payload": {"content": "We ship on Friday."}}]
+    )
+    user = seen["user"]
+    assert "Ignore calendar small talk" in user
+    assert "Categories: shipping" in user
+    assert "Assign zero or more of these categories. Do not invent categories." in user
+    assert user.index("Ignore calendar small talk") < user.index("Categories: shipping")
+    assert user.index("Categories: shipping") < user.index(
+        "Assign zero or more of these categories. Do not invent categories."
+    )
+    assert len(candidates) == 1
+    assert candidates[0].categories == ["shipping"]
+
+
+def test_empty_instructions_keep_system_prompt_unchanged() -> None:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen["system"] = next(
+            message["content"] for message in body["messages"] if message["role"] == "system"
+        )
+        seen["user"] = next(
+            message["content"] for message in body["messages"] if message["role"] == "user"
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"memories":[]}'}}]})
+
+    events = [{"event_type": "message", "payload": {"content": "hello"}}]
+    extractor = LlmExtractor(
+        api_key="sk-or-test",
+        model="openai/gpt-4o-mini",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+        instructions="",
+        categories=["shipping"],
+    )
+    extractor.extract(events)
+    assert seen["system"] == _LLM_SYSTEM
+    assert "Categories: shipping" in seen["user"]
+    assert "Assign zero or more of these categories. Do not invent categories." in seen["user"]
+    assert "Ignore calendar small talk" not in seen["user"]
 
 
 def test_llm_extractor_falls_back_to_groq_then_heuristic() -> None:

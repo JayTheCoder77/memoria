@@ -48,6 +48,10 @@ class Org(Base):
     openrouter_model: Mapped[str | None] = mapped_column(Text, nullable=True)
     groq_key_ciphertext: Mapped[str | None] = mapped_column(Text, nullable=True)
     groq_key_last4: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extraction_instructions: Mapped[str | None] = mapped_column(Text, nullable=True)
+    categories: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default=text("'[]'::jsonb")
+    )
 
     memories: Mapped[list[Memory]] = relationship(back_populates="org")
     users: Mapped[list[User]] = relationship(back_populates="org")
