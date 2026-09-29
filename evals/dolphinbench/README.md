@@ -6,7 +6,7 @@ The harness file `my_harness.py` (created by `python -m harness.runner init` ins
 
 Construct the adapter with the bench `org_id`. A missing org id is rejected. Every request sends that `org_id` plus the persona `user_id`. Use `MEMORY_API_URL` and `MEMORY_API_KEY` for the Memory API (or pass `base_url`, `api_key`, and an `httpx.Client`).
 
-`ingest` posts one `event_type=message` event, then one `event_type=session_end` for the same persona and session so the worker flushes that group, then polls `GET /events/pending?session_id=` until the count is 0. It sleeps briefly between polls and raises `RuntimeError` if the session is still pending when the wait expires. `reset` deletes that persona's memories, KV facts, and graph edges and nodes in the bench org. `freeze` sets a process flag; a later `ingest` for that persona raises `RuntimeError`.
+`ingest` posts one `event_type=message` event, then one `event_type=session_end` for the same persona and session so the worker flushes that group, then polls `GET /events/pending?session_id=` until the pending count is 0. It sleeps briefly between polls and raises `RuntimeError` if the failed count is greater than 0 or the session is still pending when the wait expires. `reset` deletes that persona's memories, KV facts, and graph edges and nodes in the bench org. `freeze` sets a process flag; a later `ingest` for that persona raises `RuntimeError`.
 
 ## Clone
 

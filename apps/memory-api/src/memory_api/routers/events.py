@@ -16,6 +16,7 @@ router = APIRouter()
 
 class PendingCount(BaseModel):
     pending: int
+    failed: int
 
 
 @router.post("/events")
@@ -47,5 +48,6 @@ def pending_events(
     store: EventStore = Depends(get_event_store),
 ) -> PendingCount:
     return PendingCount(
-        pending=store.pending_count(org_id=principal.org_id, session_id=session_id)
+        pending=store.pending_count(org_id=principal.org_id, session_id=session_id),
+        failed=store.failed_count(org_id=principal.org_id, session_id=session_id),
     )

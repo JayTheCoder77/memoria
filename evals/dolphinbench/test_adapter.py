@@ -97,6 +97,32 @@ def test_ingest_posts_one_event_and_polls_pending() -> None:
     assert elapsed < 1.0
 
 
+def test_ingest_raises_when_session_events_fail() -> None:
+    secret = "Morgan lives in Austin"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        _assert_scoped(request, user_id="morgan")
+        if request.method == "POST" and request.url.path == "/events":
+            return httpx.Response(202, json={"status": "queued", "id": str(uuid.uuid4())})
+        if request.method == "GET" and request.url.path == "/events/pending":
+            return httpx.Response(200, json={"pending": 0, "failed": 1})
+        return httpx.Response(404)
+
+    adapter, seen, _http = _adapter(handler)
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="failed") as raised:
+        adapter.ingest("morgan", "sess-1", secret)
+    elapsed = time.monotonic() - started
+
+    assert secret not in str(raised.value)
+    posts = [_body(item) for item in seen if item.method == "POST"]
+    assert [item["event_type"] for item in posts] == ["message", "session_end"]
+    polls = [item for item in seen if item.url.path == "/events/pending"]
+    assert len(polls) == 1
+    assert seen.index(next(item for item in seen if item.method == "POST")) < seen.index(polls[0])
+    assert elapsed < 1.0
+
+
 def test_ingest_raises_when_pending_does_not_clear() -> None:
     clock = {"now": 0.0}
 

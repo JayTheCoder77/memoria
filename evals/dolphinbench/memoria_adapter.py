@@ -107,6 +107,9 @@ class MemoriaBenchAdapter:
             )
             pending.raise_for_status()
             payload: dict[str, Any] = pending.json()
+            failed = payload.get("failed") or 0
+            if failed > 0:
+                raise RuntimeError(f"session {session_id} failed to drain")
             if payload.get("pending") == 0:
                 return
             if self._monotonic() >= deadline:

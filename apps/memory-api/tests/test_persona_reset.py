@@ -78,10 +78,10 @@ def test_pending_count_is_org_scoped_and_omits_event_content() -> None:
             params={"session_id": "sess-1"},
         )
         assert own.status_code == 200
-        assert own.json() == {"pending": 1}
+        assert own.json() == {"pending": 1, "failed": 0}
         assert secret not in own.text
         assert other.status_code == 200
-        assert other.json() == {"pending": 0}
+        assert other.json() == {"pending": 0, "failed": 0}
         events.pending("sess-1")[0].status = EventStatus.processing
         processing = client.get(
             "/events/pending",
@@ -95,13 +95,29 @@ def test_pending_count_is_org_scoped_and_omits_event_content() -> None:
             headers={"Authorization": f"Bearer {key_a}"},
             params={"session_id": "sess-1"},
         )
+        row.status = EventStatus.failed
+        failed = client.get(
+            "/events/pending",
+            headers={"Authorization": f"Bearer {key_a}"},
+            params={"session_id": "sess-1"},
+        )
+        other_failed = client.get(
+            "/events/pending",
+            headers={"Authorization": f"Bearer {key_b}"},
+            params={"session_id": "sess-1"},
+        )
     finally:
         app.dependency_overrides.clear()
 
     assert processing.status_code == 200
-    assert processing.json() == {"pending": 1}
+    assert processing.json() == {"pending": 1, "failed": 0}
     assert drained.status_code == 200
-    assert drained.json() == {"pending": 0}
+    assert drained.json() == {"pending": 0, "failed": 0}
+    assert failed.status_code == 200
+    assert failed.json() == {"pending": 0, "failed": 1}
+    assert secret not in failed.text
+    assert set(failed.json()) == {"pending", "failed"}
+    assert other_failed.json() == {"pending": 0, "failed": 0}
 
 
 def test_delete_routes_clear_one_users_memories_kv_and_graph() -> None:

@@ -24,6 +24,8 @@ class EventStore(Protocol):
 
     def pending_count(self, *, org_id: uuid.UUID, session_id: str) -> int: ...
 
+    def failed_count(self, *, org_id: uuid.UUID, session_id: str) -> int: ...
+
     def claim_ready(
         self, batch_size: int, *, group_window_seconds: int = 120
     ) -> list[EventBuffer]: ...
@@ -93,6 +95,15 @@ class InMemoryEventStore:
             and row.status in open_statuses
         )
 
+    def failed_count(self, *, org_id: uuid.UUID, session_id: str) -> int:
+        return sum(
+            1
+            for row in self._rows
+            if row.org_id == org_id
+            and row.session_id == session_id
+            and row.status == EventStatus.failed
+        )
+
     def claim_ready(self, batch_size: int, *, group_window_seconds: int = 120) -> list[EventBuffer]:
         grouped: dict[tuple[uuid.UUID, str], list[EventBuffer]] = {}
         for row in sorted(self._rows, key=lambda item: item.created_at):
@@ -158,13 +169,33 @@ class PostgresEventStore:
         )
 
     def pending_count(self, *, org_id: uuid.UUID, session_id: str) -> int:
+        return self._status_count(
+            org_id=org_id,
+            session_id=session_id,
+            statuses=(EventStatus.pending, EventStatus.processing),
+        )
+
+    def failed_count(self, *, org_id: uuid.UUID, session_id: str) -> int:
+        return self._status_count(
+            org_id=org_id,
+            session_id=session_id,
+            statuses=(EventStatus.failed,),
+        )
+
+    def _status_count(
+        self,
+        *,
+        org_id: uuid.UUID,
+        session_id: str,
+        statuses: tuple[EventStatus, ...],
+    ) -> int:
         count = self._session.scalar(
             select(func.count())
             .select_from(EventBuffer)
             .where(
                 EventBuffer.org_id == org_id,
                 EventBuffer.session_id == session_id,
-                EventBuffer.status.in_((EventStatus.pending, EventStatus.processing)),
+                EventBuffer.status.in_(statuses),
             )
         )
         return int(count or 0)
