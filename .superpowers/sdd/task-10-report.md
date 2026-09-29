@@ -2,7 +2,7 @@
 
 Status: DONE_WITH_CONCERNS
 
-Commit: `feat: add per-org extraction instructions`
+Commit: `71cef17` feat: add per-org extraction instructions
 
 ## What landed
 
