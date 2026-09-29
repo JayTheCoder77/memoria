@@ -3,8 +3,10 @@ import uuid
 
 import pytest
 import structlog
+from fastapi import Depends
 from fastapi.testclient import TestClient
 
+from memory_api.auth import get_org_scope, get_principal, get_session_user
 from memory_api.db.deps import (
     get_api_key_store,
     get_graph_store,
@@ -25,16 +27,25 @@ from memory_api.services.session_tokens import issue_session_token
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 
 
-def _request_finished(output: str) -> list[dict]:
-    finished = []
+def _log_events(output: str, event: str) -> list[dict]:
+    matched = []
     for line in output.splitlines():
         line = line.strip()
         if not line.startswith("{"):
             continue
         payload = json.loads(line)
-        if payload.get("event") == "request_finished":
-            finished.append(payload)
-    return finished
+        if payload.get("event") == event:
+            matched.append(payload)
+    return matched
+
+
+def _request_finished(output: str) -> list[dict]:
+    return _log_events(output, "request_finished")
+
+
+def _emit_handler_log() -> dict[str, bool]:
+    structlog.get_logger().info("handler_seen")
+    return {"ok": True}
 
 
 @pytest.fixture
@@ -117,6 +128,53 @@ def test_request_finished_logs_caller_org(logging_client: TestClient, capsys) ->
     scope_blocked_lines = _request_finished(capsys.readouterr().out)
     assert len(scope_blocked_lines) == 1
     assert scope_blocked_lines[0]["org_id"] == str(logging_client.scope_org)
+
+
+def test_handler_log_keeps_caller_org(logging_client: TestClient, capsys) -> None:
+    installed: list[object] = []
+    for path, dependency in (
+        ("/__obs/session", get_session_user),
+        ("/__obs/principal", get_principal),
+        ("/__obs/scope", get_org_scope),
+    ):
+        app.add_api_route(
+            path,
+            _emit_handler_log,
+            methods=["GET"],
+            dependencies=[Depends(dependency)],
+        )
+        installed.append(app.router.routes[-1])
+
+    def handler_org(output: str) -> str | None:
+        lines = _log_events(output, "handler_seen")
+        assert len(lines) == 1
+        return lines[0]["org_id"]
+
+    try:
+        capsys.readouterr()
+        user = logging_client.session_user
+        logging_client.cookies.set("memoria_session", issue_session_token(user))
+        session = logging_client.get("/__obs/session")
+        logging_client.cookies.clear()
+        assert session.status_code == 200
+        assert handler_org(capsys.readouterr().out) == str(user.org_id)
+
+        created = logging_client.get(
+            "/__obs/principal",
+            headers={"Authorization": f"Bearer {logging_client.principal_key}"},
+        )
+        assert created.status_code == 200
+        assert handler_org(capsys.readouterr().out) == str(logging_client.principal_org)
+
+        scoped = logging_client.get(
+            "/__obs/scope",
+            headers={"Authorization": f"Bearer {logging_client.scope_key}"},
+        )
+        assert scoped.status_code == 200
+        assert handler_org(capsys.readouterr().out) == str(logging_client.scope_org)
+    finally:
+        for route in installed:
+            app.router.routes.remove(route)
 
 
 def test_log_drops_memory_text_and_secrets(capsys):

@@ -19,7 +19,7 @@ def _stamp_org(request: Request, org_id: uuid.UUID) -> None:
     bind_org_id(str(org_id))
 
 
-def get_principal(
+async def get_principal(
     request: Request,
     authorization: str | None = Header(default=None),
     store: ApiKeyStore = Depends(get_api_key_store),
@@ -43,7 +43,7 @@ def get_principal(
     return principal
 
 
-def get_session_user(
+async def get_session_user(
     request: Request,
     authorization: str | None = Header(default=None),
     identities: IdentityRepository = Depends(get_identity_repository),
@@ -76,7 +76,7 @@ def get_session_user(
     return user
 
 
-def get_org_scope(
+async def get_org_scope(
     request: Request,
     authorization: str | None = Header(default=None),
     store: ApiKeyStore = Depends(get_api_key_store),
@@ -103,7 +103,7 @@ def get_org_scope(
                     detail="Rate limit exceeded",
                 ) from exc
             return principal.org_id
-    user = get_session_user(
+    user = await get_session_user(
         request=request,
         authorization=authorization,
         identities=identities,
