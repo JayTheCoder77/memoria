@@ -10,7 +10,6 @@ from memory_api.db.deps import get_api_key_store, get_graph_store, get_kv_store,
 from memory_api.db.models import Org
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.main import app
-from memory_api.routers.memories import _org_llm_key
 from memory_api.services.api_keys import InMemoryApiKeyStore, generate_api_key
 from memory_api.services.embedding import HashEmbedder, embed_text, get_embedder
 from memory_api.services.llm_json import LlmProvider
@@ -353,24 +352,7 @@ def test_search_kv_union_respects_session_scope(
     assert other_id not in ids
 
 
-def test_org_llm_key_decrypt_failure_returns_none(monkeypatch: pytest.MonkeyPatch) -> None:
-    org = Org(id=uuid.uuid4(), openrouter_key_ciphertext="cipher")
-
-    class FakeSession:
-        def get(self, model: type, pk: uuid.UUID) -> Org:
-            return org
-
-    class FakeRepo:
-        _session = FakeSession()
-
-    def boom(_ciphertext: str) -> str:
-        raise RuntimeError("decrypt failed")
-
-    monkeypatch.setattr("memory_api.routers.memories.decrypt_secret", boom)
-    assert _org_llm_key(FakeRepo(), org.id) == (None, None)
-
-
-def test_search_survives_org_key_decrypt_failure(
+def test_search_does_not_decrypt_org_llm_key(
     monkeypatch: pytest.MonkeyPatch,
     keys: InMemoryApiKeyStore,
     kv: InMemoryKVStore,
@@ -390,10 +372,17 @@ def test_search_survives_org_key_decrypt_failure(
         {"get": lambda self, model, pk: org if model is Org else None},
     )()
 
-    def boom(_ciphertext: str) -> str:
+    decrypt_calls: list[str] = []
+
+    def spy(ciphertext: str) -> str:
+        decrypt_calls.append(ciphertext)
         raise RuntimeError("decrypt failed")
 
-    monkeypatch.setattr("memory_api.routers.memories.decrypt_secret", boom)
+    monkeypatch.setattr("memory_api.services.secrets.decrypt_secret", spy)
+    import memory_api.routers.memories as memories_router
+
+    if hasattr(memories_router, "decrypt_secret"):
+        monkeypatch.setattr(memories_router, "decrypt_secret", spy)
 
     app.dependency_overrides[get_repository] = lambda: repo
     app.dependency_overrides[get_embedder] = lambda: HashEmbedder()
@@ -424,6 +413,7 @@ def test_search_survives_org_key_decrypt_failure(
         assert search.status_code == 200
         ids = {row["id"] for row in search.json()["memories"]}
         assert target.json()["id"] in ids
+    assert decrypt_calls == []
     app.dependency_overrides.clear()
 
 

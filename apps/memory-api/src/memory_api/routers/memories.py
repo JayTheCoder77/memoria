@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import uuid
 from datetime import UTC, datetime
 
@@ -28,27 +27,9 @@ from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.org_llm import org_chat_providers
 from memory_api.services.scoring import fused_relevance
-from memory_api.services.secrets import decrypt_secret
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
-
-
-def _org_llm_key(
-    repo: MemoryRepository, org_id: uuid.UUID
-) -> tuple[str | None, str | None]:
-    session = getattr(repo, "_session", None)
-    if session is None:
-        return None, None
-    org = session.get(Org, org_id)
-    if org is None or not org.openrouter_key_ciphertext:
-        return None, None
-    try:
-        return decrypt_secret(org.openrouter_key_ciphertext), org.openrouter_model
-    except Exception:
-        logger.exception("Failed to decrypt org OpenRouter key; using rules fallback")
-        return None, None
 
 
 def _to_out(
@@ -139,10 +120,6 @@ def search(
     kv: KVStore = Depends(get_kv_store),
     graph: GraphStore = Depends(get_graph_store),
 ) -> MemorySearchResponse:
-    api_key: str | None = None
-    model: str | None = None
-    if settings.enable_kv or settings.enable_graph:
-        api_key, model = _org_llm_key(repo, principal.org_id)
     result = HybridRetriever(
         repo=repo,
         vector=vector,
@@ -156,8 +133,6 @@ def search(
         limit=limit,
         token_budget=token_budget,
         as_of=as_of,
-        api_key=api_key,
-        model=model,
     )
 
     def _hit(item: RankedHit) -> MemoryOut:

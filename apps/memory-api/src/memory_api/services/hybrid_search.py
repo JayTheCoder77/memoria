@@ -70,13 +70,8 @@ def _elapsed_ms(started: float) -> float:
     return (time.perf_counter() - started) * 1000.0
 
 
-def _store_span_attributes(
-    org_id: uuid.UUID, store: str, model: str | None
-) -> dict[str, str]:
-    attributes = {"org_id": str(org_id), "store": store}
-    if model:
-        attributes["model"] = model
-    return attributes
+def _store_span_attributes(org_id: uuid.UUID, store: str) -> dict[str, str]:
+    return {"org_id": str(org_id), "store": store}
 
 
 @dataclass
@@ -128,8 +123,6 @@ class HybridRetriever:
         limit: int = 10,
         token_budget: int = 2048,
         as_of: datetime | None = None,
-        api_key: str | None = None,
-        model: str | None = None,
     ) -> HybridSearchResult:
         total_started = time.perf_counter()
         embed_started = time.perf_counter()
@@ -144,10 +137,8 @@ class HybridRetriever:
                 session_id,
                 vector_limit,
             )
-            kv_future = pool.submit(self._kv_search, org_id, q, api_key, model)
-            graph_future = pool.submit(
-                self._graph_search, org_id, q, api_key, model, as_of
-            )
+            kv_future = pool.submit(self._kv_search, org_id, q)
+            graph_future = pool.submit(self._graph_search, org_id, q, as_of)
             lexical_future = pool.submit(
                 self._lexical_search, org_id, q, session_id, vector_limit
             )
@@ -348,15 +339,13 @@ class HybridRetriever:
         self,
         org_id: uuid.UUID,
         q: str,
-        api_key: str | None,
-        model: str | None,
     ) -> tuple[list[KVFact], float]:
         if not settings.enable_kv:
             return [], 0.0
         started = time.perf_counter()
-        with start_span("kv_search", **_store_span_attributes(org_id, "kv", model)):
+        with start_span("kv_search", **_store_span_attributes(org_id, "kv")):
             try:
-                candidates = derive_kv_candidates(q, api_key=api_key, model=model)
+                candidates = derive_kv_candidates(q)
                 store = self._kv
                 session = None
                 if isinstance(self._kv, PostgresKVStore):
@@ -378,16 +367,14 @@ class HybridRetriever:
         self,
         org_id: uuid.UUID,
         q: str,
-        api_key: str | None,
-        model: str | None,
         as_of: datetime | None,
     ) -> tuple[dict[uuid.UUID, int], float]:
         if not settings.enable_graph:
             return {}, 0.0
         started = time.perf_counter()
-        with start_span("graph_search", **_store_span_attributes(org_id, "graph", model)):
+        with start_span("graph_search", **_store_span_attributes(org_id, "graph")):
             try:
-                seeds = derive_graph_seeds(q, api_key=api_key, model=model)
+                seeds = derive_graph_seeds(q)
                 store = self._graph
                 session = None
                 if isinstance(self._graph, PostgresGraphStore):
