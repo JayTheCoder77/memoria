@@ -81,6 +81,7 @@ class ScoreDetails(BaseModel):
     recency: float
     sources: list[str]
     vector_similarity: float
+    lexical: float = 0.0
     kv_match: float | None = None
     graph_hops: int | None = None
     weights: dict[str, float]

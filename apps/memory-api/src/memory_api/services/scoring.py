@@ -26,6 +26,16 @@ def recency_weight(
     return 0.5 ** (age_days / half_life_days)
 
 
+def fused_relevance(
+    *,
+    vector_similarity: float,
+    lexical: float,
+    kv_match: float | None,
+    graph_score: float,
+) -> float:
+    return max(vector_similarity, lexical, kv_match or 0.0, graph_score)
+
+
 def retrieval_score(
     *,
     similarity: float,

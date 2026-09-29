@@ -14,7 +14,12 @@ from memory_api.observability.tracing import start_span
 from memory_api.services.embedding import Embedder, embed_text
 from memory_api.services.graph_seeds import derive_graph_seeds
 from memory_api.services.kv_candidates import derive_kv_candidates
-from memory_api.services.scoring import recency_weight, retrieval_score, truncate_to_token_budget
+from memory_api.services.scoring import (
+    fused_relevance,
+    recency_weight,
+    retrieval_score,
+    truncate_to_token_budget,
+)
 from memory_api.stores.graph import PostgresGraphStore
 from memory_api.stores.kv import PostgresKVStore
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
@@ -52,6 +57,7 @@ class RankedHit:
     vector_hit: bool
     kv_match: float | None
     graph_hops: int | None
+    lexical: float
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,16 @@ def _store_span_attributes(
     if model:
         attributes["model"] = model
     return attributes
+
+
+@dataclass
+class _Candidate:
+    memory: Memory
+    similarity: float
+    vector_hit: bool
+    kv_match: float | None
+    graph_hops: int | None
+    lexical: float
 
 
 def _graph_score(graph_hops: int | None) -> float:
@@ -120,7 +136,7 @@ class HybridRetriever:
         query_embedding = embed_text(q, embedder=self._embedder)
         embed_ms = _elapsed_ms(embed_started)
         vector_limit = max(limit * 5, 20)
-        with ThreadPoolExecutor(max_workers=3) as pool:
+        with ThreadPoolExecutor(max_workers=4) as pool:
             vector_future = pool.submit(
                 self._vector_search,
                 org_id,
@@ -132,64 +148,98 @@ class HybridRetriever:
             graph_future = pool.submit(
                 self._graph_search, org_id, q, api_key, model, as_of
             )
+            lexical_future = pool.submit(
+                self._lexical_search, org_id, q, session_id, vector_limit
+            )
             scored, vector_ms = vector_future.result()
             facts, kv_ms = kv_future.result()
             hops_map, graph_ms = graph_future.result()
+            lexical_hits, _lexical_ms = lexical_future.result()
 
-        union: dict[
-            uuid.UUID, tuple[Memory, float, bool, float | None, int | None]
-        ] = {
-            item.memory.id: (item.memory, item.similarity, True, None, None)
+        union: dict[uuid.UUID, _Candidate] = {
+            item.memory.id: _Candidate(
+                memory=item.memory,
+                similarity=item.similarity,
+                vector_hit=True,
+                kv_match=None,
+                graph_hops=None,
+                lexical=0.0,
+            )
             for item in scored
         }
 
-        for fact in facts:
-            existing = union.get(fact.memory_id)
-            if existing is not None:
-                memory, similarity, vector_hit, _, graph_hops = existing
-                union[fact.memory_id] = (
-                    memory,
-                    similarity,
-                    vector_hit,
-                    1.0,
-                    graph_hops,
-                )
-                continue
-            memory = self._repo.get(org_id=org_id, memory_id=fact.memory_id)
-            if memory is None:
-                continue
-            if session_id is not None and memory.session_id != session_id:
-                continue
-            union[fact.memory_id] = (memory, 0.0, False, 1.0, None)
-
-        for memory_id, hop_count in hops_map.items():
+        for memory_id, lexical_score in lexical_hits:
             existing = union.get(memory_id)
             if existing is not None:
-                memory, similarity, vector_hit, kv_match, _ = existing
-                union[memory_id] = (
-                    memory,
-                    similarity,
-                    vector_hit,
-                    kv_match,
-                    hop_count,
-                )
+                existing.lexical = lexical_score
                 continue
             memory = self._repo.get(org_id=org_id, memory_id=memory_id)
             if memory is None:
                 continue
             if session_id is not None and memory.session_id != session_id:
                 continue
-            union[memory_id] = (memory, 0.0, False, None, hop_count)
+            union[memory_id] = _Candidate(
+                memory=memory,
+                similarity=0.0,
+                vector_hit=False,
+                kv_match=None,
+                graph_hops=None,
+                lexical=lexical_score,
+            )
+
+        for fact in facts:
+            existing = union.get(fact.memory_id)
+            if existing is not None:
+                existing.kv_match = 1.0
+                continue
+            memory = self._repo.get(org_id=org_id, memory_id=fact.memory_id)
+            if memory is None:
+                continue
+            if session_id is not None and memory.session_id != session_id:
+                continue
+            union[fact.memory_id] = _Candidate(
+                memory=memory,
+                similarity=0.0,
+                vector_hit=False,
+                kv_match=1.0,
+                graph_hops=None,
+                lexical=0.0,
+            )
+
+        for memory_id, hop_count in hops_map.items():
+            existing = union.get(memory_id)
+            if existing is not None:
+                existing.graph_hops = hop_count
+                continue
+            memory = self._repo.get(org_id=org_id, memory_id=memory_id)
+            if memory is None:
+                continue
+            if session_id is not None and memory.session_id != session_id:
+                continue
+            union[memory_id] = _Candidate(
+                memory=memory,
+                similarity=0.0,
+                vector_hit=False,
+                kv_match=None,
+                graph_hops=hop_count,
+                lexical=0.0,
+            )
 
         ranked: list[RankedHit] = []
-        for memory, similarity, vector_hit, kv_match, graph_hops in union.values():
+        for candidate in union.values():
             recency = recency_weight(
-                memory.created_at, half_life_days=settings.recency_halflife_days
+                candidate.memory.created_at,
+                half_life_days=settings.recency_halflife_days,
             )
-            relevance = max(similarity, kv_match or 0.0, _graph_score(graph_hops))
+            relevance = fused_relevance(
+                vector_similarity=candidate.similarity,
+                lexical=candidate.lexical,
+                kv_match=candidate.kv_match,
+                graph_score=_graph_score(candidate.graph_hops),
+            )
             score = retrieval_score(
                 similarity=relevance,
-                importance=memory.importance,
+                importance=candidate.memory.importance,
                 recency=recency,
                 semantic_weight=settings.fusion_weight_relevance,
                 importance_weight=settings.fusion_weight_importance,
@@ -197,14 +247,15 @@ class HybridRetriever:
             )
             ranked.append(
                 RankedHit(
-                    memory=memory,
+                    memory=candidate.memory,
                     score=score,
-                    similarity=similarity,
+                    similarity=candidate.similarity,
                     recency=recency,
-                    importance=memory.importance,
-                    vector_hit=vector_hit,
-                    kv_match=kv_match,
-                    graph_hops=graph_hops,
+                    importance=candidate.memory.importance,
+                    vector_hit=candidate.vector_hit,
+                    kv_match=candidate.kv_match,
+                    graph_hops=candidate.graph_hops,
+                    lexical=candidate.lexical,
                 )
             )
         ranked.sort(key=lambda item: item.score, reverse=True)
@@ -223,6 +274,42 @@ class HybridRetriever:
         )
         logger.info("hybrid_search_timings %s", timings.as_dict())
         return HybridSearchResult(hits=hits, timings=timings)
+
+    def _lexical_search(
+        self,
+        org_id: uuid.UUID,
+        q: str,
+        session_id: str | None,
+        limit: int,
+    ) -> tuple[list[tuple[uuid.UUID, float]], float]:
+        started = time.perf_counter()
+        with start_span("lexical_search", org_id=str(org_id), store="lexical"):
+            if not self._vector_is_postgres():
+                return [], _elapsed_ms(started)
+            session = None
+            try:
+                from memory_api.db.session import SessionLocal
+                from memory_api.services.lexical import lexical_search
+
+                session = SessionLocal()
+                rows = lexical_search(
+                    session,
+                    org_id=org_id,
+                    q=q,
+                    session_id=session_id,
+                    limit=limit,
+                    embedding_model=self._embedder.model_name,
+                )
+                return rows, _elapsed_ms(started)
+            except Exception as exc:
+                logger.error(
+                    "Lexical search failed; using other results only (%s)",
+                    type(exc).__name__,
+                )
+                return [], _elapsed_ms(started)
+            finally:
+                if session is not None:
+                    session.close()
 
     def _vector_search(
         self,

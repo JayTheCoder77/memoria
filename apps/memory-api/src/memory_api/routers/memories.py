@@ -27,6 +27,7 @@ from memory_api.services.hybrid_search import HybridRetriever, RankedHit
 from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.org_llm import org_chat_providers
+from memory_api.services.scoring import fused_relevance
 from memory_api.services.secrets import decrypt_secret
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
@@ -165,10 +166,17 @@ def search(
             graph_score = (
                 1.0 if item.graph_hops == 1 else 0.5 if item.graph_hops == 2 else 0.0
             )
-            relevance = max(item.similarity, item.kv_match or 0.0, graph_score)
+            relevance = fused_relevance(
+                vector_similarity=item.similarity,
+                lexical=item.lexical,
+                kv_match=item.kv_match,
+                graph_score=graph_score,
+            )
             sources = []
             if item.vector_hit:
                 sources.append("vector")
+            if item.lexical > 0:
+                sources.append("lexical")
             if item.kv_match is not None:
                 sources.append("kv")
             if item.graph_hops is not None:
@@ -179,6 +187,7 @@ def search(
                 recency=item.recency,
                 sources=sources,
                 vector_similarity=item.similarity,
+                lexical=item.lexical,
                 kv_match=item.kv_match,
                 graph_hops=item.graph_hops,
                 weights={
