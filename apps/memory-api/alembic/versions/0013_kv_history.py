@@ -62,6 +62,17 @@ def upgrade() -> None:
         unique=True,
         postgresql_where=sa.text("valid_to IS NULL"),
     )
+    op.execute(
+        sa.text(
+            """
+            INSERT INTO kv_fact_history (
+                org_id, user_id, fact_type, entity, value, memory_id
+            )
+            SELECT org_id, user_id, fact_type, entity, value, memory_id
+            FROM kv_facts
+            """
+        )
+    )
 
 
 def downgrade() -> None:

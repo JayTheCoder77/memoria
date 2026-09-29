@@ -55,6 +55,22 @@ def test_second_kv_put_keeps_previous_value_in_history() -> None:
     assert closed[0].entity == "berlin"
 
 
+def test_value_change_without_open_history_keeps_previous_value() -> None:
+    store = InMemoryKVStore()
+    org_id = uuid.uuid4()
+    store.put(org_id, uuid.uuid4(), "city", "berlin", value="berlin", importance=0.5)
+    store._history.clear()
+
+    store.put(org_id, uuid.uuid4(), "city", "berlin", value="lisbon", importance=0.5)
+
+    current = store.by_org(org_id)
+    assert len(current) == 1
+    assert current[0].value == "lisbon"
+    closed = [row for row in store.history(org_id) if row.value == "berlin"]
+    assert len(closed) == 1
+    assert closed[0].valid_to is not None
+
+
 def test_kv_and_graph_normalize_entities_before_insert() -> None:
     org_id = uuid.uuid4()
     kv = InMemoryKVStore()

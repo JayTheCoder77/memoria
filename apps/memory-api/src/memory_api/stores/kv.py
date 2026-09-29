@@ -81,6 +81,8 @@ class InMemoryKVStore:
                 entity=entity_n,
                 value=value,
                 memory_id=memory_id,
+                previous_value=None if existing is None else existing.value,
+                previous_memory_id=None if existing is None else existing.memory_id,
             )
         self._rows[key] = KVFact(
             org_id=org_id,
@@ -199,9 +201,12 @@ class InMemoryKVStore:
         entity: str,
         value: str | None,
         memory_id: uuid.UUID,
+        previous_value: str | None = None,
+        previous_memory_id: uuid.UUID | None = None,
     ) -> None:
         now = datetime.now(UTC)
         updated: list[KVFactHistory] = []
+        closed_open = False
         for row in self._history:
             if (
                 row.valid_to is None
@@ -211,8 +216,23 @@ class InMemoryKVStore:
                 and row.entity == entity
             ):
                 updated.append(replace(row, valid_to=now))
+                closed_open = True
             else:
                 updated.append(row)
+        if not closed_open and previous_memory_id is not None:
+            updated.append(
+                KVFactHistory(
+                    id=uuid.uuid4(),
+                    org_id=org_id,
+                    user_id=user_id,
+                    fact_type=fact_type,
+                    entity=entity,
+                    value=previous_value,
+                    memory_id=previous_memory_id,
+                    valid_from=now,
+                    valid_to=now,
+                )
+            )
         updated.append(
             KVFactHistory(
                 id=uuid.uuid4(),
@@ -277,6 +297,8 @@ class PostgresKVStore:
                 value=value,
                 memory_id=memory_id,
                 now=now,
+                previous_value=None if existing is None else existing.value,
+                previous_memory_id=None if existing is None else existing.memory_id,
             )
         stmt = insert(KvFact).values(
             org_id=org_id,
@@ -410,6 +432,8 @@ class PostgresKVStore:
         value: str | None,
         memory_id: uuid.UUID,
         now: datetime,
+        previous_value: str | None = None,
+        previous_memory_id: uuid.UUID | None = None,
     ) -> None:
         open_rows = self._session.scalars(
             select(KvFactHistoryRow).where(
@@ -423,6 +447,20 @@ class PostgresKVStore:
         for row in open_rows:
             row.valid_to = now
         if open_rows:
+            self._session.flush()
+        elif previous_memory_id is not None:
+            self._session.add(
+                KvFactHistoryRow(
+                    org_id=org_id,
+                    user_id=user_id,
+                    fact_type=fact_type,
+                    entity=entity,
+                    value=previous_value,
+                    memory_id=previous_memory_id,
+                    valid_from=now,
+                    valid_to=now,
+                )
+            )
             self._session.flush()
         self._session.add(
             KvFactHistoryRow(
