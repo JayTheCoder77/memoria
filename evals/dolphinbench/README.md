@@ -38,9 +38,9 @@ export MEMORY_API_KEY=mem_your_key
 uv run --project apps/memory-api ./evals/dolphinbench/smoke.sh
 ```
 
-`MEMORY_API_URL` and `MEMORY_API_KEY` are required. Optional `MEMORY_ORG_ID` is the org id the adapter sends (default `11111111-1111-1111-1111-111111111111`); the API still authorizes with the key. The script reads the 20 JSONL lines in `evals/dolphinbench/fixtures/morgan-sample.jsonl`, resets persona `morgan`, ingests each line in order, calls `freeze`, then `context` with the `smoke_query` on the line marked `"smoke_fact": true`. It exits 0 only when that line's `content` is in the context, and either `GET /metrics` contains `memoria_llm_tokens_total` or the `llm_usage` table has a row whose `user_id` is `morgan`.
+`MEMORY_API_URL` and `MEMORY_API_KEY` are required. Optional `MEMORY_ORG_ID` is the org id the adapter sends (default `11111111-1111-1111-1111-111111111111`); the API still authorizes with the key. For the ledger path, set `MEMORY_ORG_ID` to the org that owns that key. Usage rows are stored on the key's org, and a row from another org does not pass. The script reads the 20 JSONL lines in `evals/dolphinbench/fixtures/morgan-sample.jsonl`, resets persona `morgan`, ingests each line in order, calls `freeze`, then `context` with the `smoke_query` on the line marked `"smoke_fact": true`. It exits 0 only when that line's `content` is in the context, and either a `memoria_llm_tokens_total` sample is greater than 0 or this run inserts an `llm_usage` row for that `org_id` and `user_id`. HELP and TYPE lines do not count, and a sample of 0 does not count.
 
-The ledger check runs only when the metrics text does not contain the counter name. It uses `MEMORIA_DATABASE_URL` or `DATABASE_URL` if one is set. The script does not print memory text, prompts, or the API key.
+The ledger check runs only when no token sample is greater than 0. It uses `MEMORIA_DATABASE_URL` or `DATABASE_URL`. The script counts `llm_usage` rows for that org and user before ingest and requires the count to increase. A ledger query error fails the smoke. The script does not print memory text, prompts, or the API key.
 
 ## Paid run
 
