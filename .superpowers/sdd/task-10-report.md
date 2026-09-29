@@ -92,3 +92,56 @@ Result: 196 passed, 1 warning (pre-existing Starlette/`httpx` deprecation).
 
 - `_LLM_SYSTEM` still describes a JSON object without a `categories` field. The appendix tells the model to assign categories and not invent them, and the filter reads `memories[].categories`. A live model that follows only the system schema may omit that field, so every candidate's category list stays empty. The fake-provider test covers the filter when the field is present.
 - The settings card typechecks. It was not clicked through in a browser. The page redirects to Google sign-in, and no session was available.
+
+## Fix: failed policy load
+
+A non-OK `GET /org/extraction-policy` used to become `{ instructions: null, categories: [] }`. The settings card then rendered a saveable form, and saving it cleared stored instructions and categories.
+
+`getExtractionPolicy` now returns `{ ok: false, error: "Could not load extraction policy" }` on any non-OK response. The card shows that error and does not render the form or a save button. A successful empty policy is unchanged and can still be saved. The extraction prompt, `_LLM_SYSTEM`, and the category JSON schema were not changed.
+
+Covering test: `apps/web/lib/api-client.test.ts`
+
+### RED
+
+Command (from `apps/web`):
+
+```bash
+bun test lib/api-client.test.ts
+```
+
+```
+error: expect(received).toEqual(expected)
+
+  {
+-   "error": "Could not load extraction policy",
+-   "ok": false,
++   "categories": [],
++   "instructions": null,
+  }
+
+(fail) failed extraction policy load is not an empty policy
+ 0 pass
+ 1 fail
+```
+
+### GREEN
+
+Same command:
+
+```bash
+bun test lib/api-client.test.ts
+```
+
+```
+(pass) failed extraction policy load is not an empty policy
+ 1 pass
+ 0 fail
+```
+
+Relevant suite before commit, from `apps/web`:
+
+```bash
+node ./node_modules/typescript/bin/tsc --noEmit --pretty false -p ./tsconfig.json && bun test
+```
+
+Typecheck produced no errors. `bun test` result: 1 pass, 0 fail. Python was not changed, so the memory-api extraction tests were not re-run.

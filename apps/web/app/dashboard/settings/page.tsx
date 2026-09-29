@@ -36,7 +36,7 @@ export default async function SettingsPage() {
             {me?.user.email ?? session.user?.email}
           </p>
         </Card>
-        <ExtractionPolicyCard policy={extractionPolicy} />
+        <ExtractionPolicyCard load={extractionPolicy} />
         <OpenRouterCard
           status={
             me?.openrouter ?? { configured: false, last4: null, model: null }

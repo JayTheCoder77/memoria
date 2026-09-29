@@ -136,12 +136,16 @@ export type ExtractionPolicy = {
   categories: string[];
 };
 
-export async function getExtractionPolicy(token: string): Promise<ExtractionPolicy> {
+export type ExtractionPolicyLoad =
+  | { ok: true; policy: ExtractionPolicy }
+  | { ok: false; error: string };
+
+export async function getExtractionPolicy(token: string): Promise<ExtractionPolicyLoad> {
   const response = await apiFetch("/org/extraction-policy", token);
   if (!response.ok) {
-    return { instructions: null, categories: [] };
+    return { ok: false, error: "Could not load extraction policy" };
   }
-  return (await response.json()) as ExtractionPolicy;
+  return { ok: true, policy: (await response.json()) as ExtractionPolicy };
 }
 
 export async function saveExtractionPolicyRequest(

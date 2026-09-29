@@ -4,14 +4,27 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import type { ExtractionPolicy } from "@/lib/api-client";
+import type { ExtractionPolicyLoad } from "@/lib/api-client";
 
 import { saveExtractionPolicy } from "./actions";
 
-export function ExtractionPolicyCard({ policy }: { policy: ExtractionPolicy }) {
+export function ExtractionPolicyCard({ load }: { load: ExtractionPolicyLoad }) {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  if (!load.ok) {
+    return (
+      <Card className="p-6">
+        <p className="font-mono text-xs uppercase tracking-[0.18em] text-text-secondary">
+          Extraction
+        </p>
+        <p className="mt-3 text-sm text-danger">{load.error}</p>
+      </Card>
+    );
+  }
+
+  const policy = load.policy;
 
   return (
     <Card className="p-6">
