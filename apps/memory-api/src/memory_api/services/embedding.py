@@ -121,6 +121,11 @@ class HuggingFaceEmbedder:
 def get_embedder() -> Embedder:
     from memory_api.config import settings
 
+    if settings.embedder == "hash" and settings.env != "test":
+        raise RuntimeError(
+            "MEMORIA_EMBEDDER=hash is only allowed when MEMORIA_ENV=test; "
+            "set MEMORIA_EMBEDDER to minilm or hf"
+        )
     if settings.embedder in {"hf", "huggingface"}:
         return HuggingFaceEmbedder()
     if settings.embedder == "minilm":

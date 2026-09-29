@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "postgresql+psycopg://memoria:memoria@localhost:5432/memoria"
+    env: str = "dev"
     embedder: str = "hash"
     hf_token: str = ""
     hf_model: str = "sentence-transformers/all-MiniLM-L6-v2"
