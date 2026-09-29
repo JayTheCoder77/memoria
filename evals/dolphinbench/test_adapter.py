@@ -76,14 +76,19 @@ def test_ingest_posts_one_event_and_polls_pending() -> None:
 
     posts = [item for item in seen if item.method == "POST" and item.url.path == "/events"]
     polls = [item for item in seen if item.method == "GET" and item.url.path == "/events/pending"]
-    assert len(posts) == 1
-    body = _body(posts[0])
-    assert body["event_type"] == "message"
-    assert body["user_id"] == "morgan"
-    assert body["session_id"] == "sess-1"
-    assert body["org_id"] == BENCH_ORG
-    assert body["payload"]["content"] == "Morgan lives in Austin"
-    assert seen.index(posts[0]) < seen.index(polls[0])
+    assert len(posts) == 2
+    message, closed = (_body(posts[0]), _body(posts[1]))
+    assert message["event_type"] == "message"
+    assert message["user_id"] == "morgan"
+    assert message["session_id"] == "sess-1"
+    assert message["org_id"] == BENCH_ORG
+    assert message["payload"]["content"] == "Morgan lives in Austin"
+    assert closed["event_type"] == "session_end"
+    assert closed["user_id"] == "morgan"
+    assert closed["session_id"] == "sess-1"
+    assert closed["org_id"] == BENCH_ORG
+    assert "Morgan lives in Austin" not in posts[1].content.decode()
+    assert seen.index(posts[0]) < seen.index(posts[1]) < seen.index(polls[0])
     assert len(polls) == 1
     assert polls[0].url.params["session_id"] == "sess-1"
     assert polls[0].url.params["user_id"] == "morgan"
@@ -139,8 +144,10 @@ def test_freeze_rejects_later_ingest() -> None:
         other.ingest("morgan", "sess-2", "must not be written")
 
     posts = [item for item in seen if item.method == "POST"]
-    assert len(posts) == 1
-    assert _body(posts[0])["session_id"] == "sess-1"
+    assert [(_body(item)["event_type"], _body(item)["session_id"]) for item in posts] == [
+        ("message", "sess-1"),
+        ("session_end", "sess-1"),
+    ]
 
 
 def test_context_places_profile_text_before_search_hits() -> None:

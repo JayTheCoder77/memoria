@@ -67,19 +67,35 @@ class MemoriaBenchAdapter:
     def ingest(self, persona: str, session_id: str, content: str) -> None:
         if persona in self._frozen:
             raise RuntimeError(f"memory is frozen for {persona}")
+        self._post_event(
+            persona,
+            session_id,
+            event_type="message",
+            payload={"content": content},
+        )
+        self._post_event(persona, session_id, event_type="session_end", payload={})
+        self._wait_until_drained(persona, session_id)
+
+    def _post_event(
+        self,
+        persona: str,
+        session_id: str,
+        *,
+        event_type: str,
+        payload: dict[str, Any],
+    ) -> None:
         queued = self._http.post(
             "/events",
             headers=self._headers(),
             json={
                 "org_id": self.org_id,
                 "session_id": session_id,
-                "event_type": "message",
+                "event_type": event_type,
                 "user_id": persona,
-                "payload": {"content": content},
+                "payload": payload,
             },
         )
         queued.raise_for_status()
-        self._wait_until_drained(persona, session_id)
 
     def _wait_until_drained(self, persona: str, session_id: str) -> None:
         deadline = self._monotonic() + self._poll_timeout
