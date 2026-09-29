@@ -28,7 +28,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
                 providers = org_chat_providers(org, timeout=30.0)
                 if not providers:
                     return HeuristicExtractor()
-                return LlmExtractor(providers=providers)
+                return LlmExtractor(providers=providers, org_id=org_id)
 
             kv = PostgresKVStore(session) if settings.enable_kv else NoOpKVStore()
             graph = PostgresGraphStore(session) if settings.enable_graph else NoOpGraphStore()

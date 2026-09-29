@@ -89,6 +89,7 @@ def create_memory(
         kv_triples, graph_triples = enrich_hybrid_triples(
             body.content,
             providers=providers,
+            org_id=principal.org_id,
         )
         if kv_triples or graph_triples:
             candidate = Candidate(

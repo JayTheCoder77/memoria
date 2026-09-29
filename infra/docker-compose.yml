@@ -16,5 +16,38 @@ services:
       timeout: 5s
       retries: 10
 
+  otel-collector:
+    image: otel/opentelemetry-collector:0.128.0
+    profiles: ["obs"]
+    command: ["--config=/etc/otelcol/config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    configs:
+      - source: otel-collector-config
+        target: /etc/otelcol/config.yaml
+
 volumes:
   memoria-pgdata:
+
+configs:
+  otel-collector-config:
+    content: |
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      processors:
+        batch:
+      exporters:
+        debug:
+          verbosity: basic
+      service:
+        pipelines:
+          traces:
+            receivers: [otlp]
+            processors: [batch]
+            exporters: [debug]

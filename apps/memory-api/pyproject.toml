@@ -13,6 +13,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.45.0",
     "opentelemetry-sdk>=1.45.0",
     "pgvector>=0.4",
+    "prometheus-client>=0.26.0",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.10",
     "pyjwt>=2.10",

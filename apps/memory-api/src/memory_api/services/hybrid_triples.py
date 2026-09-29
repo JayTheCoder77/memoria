@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 import httpx
@@ -60,6 +61,8 @@ def enrich_hybrid_triples(
     *,
     providers: list[LlmProvider] | None = None,
     http: httpx.Client | None = None,
+    org_id: uuid.UUID | None = None,
+    user_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     if not content.strip() or not providers:
         return [], []
@@ -72,6 +75,8 @@ def enrich_hybrid_triples(
             ],
             providers=providers,
             http=http,
+            org_id=org_id,
+            user_id=user_id,
         )
     except Exception:
         logger.exception("Hybrid triple LLM failed; using rules fallback")

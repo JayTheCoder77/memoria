@@ -9,6 +9,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from memory_api.observability.logging import bind_request, clear_request, log_request_finished
+from memory_api.observability.metrics import observe_request_duration
 
 
 def _org_id_from_request(request: Request) -> str | None:
@@ -30,6 +31,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
         except Exception:
             duration_ms = (time.perf_counter() - start) * 1000.0
+            observe_request_duration(duration_ms / 1000.0)
             log_request_finished(
                 status_code=500,
                 duration_ms=duration_ms,
@@ -38,6 +40,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             clear_request()
             raise
         duration_ms = (time.perf_counter() - start) * 1000.0
+        observe_request_duration(duration_ms / 1000.0)
         log_request_finished(
             status_code=response.status_code,
             duration_ms=duration_ms,

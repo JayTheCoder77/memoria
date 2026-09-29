@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -95,6 +96,8 @@ class LlmExtractor:
         http: httpx.Client | None = None,
         http_referer: str | None = None,
         app_title: str | None = None,
+        org_id: uuid.UUID | None = None,
+        user_id: str | None = None,
     ) -> None:
         from memory_api.config import settings
 
@@ -120,6 +123,8 @@ class LlmExtractor:
         self._api_key = provider.api_key
         self._model = provider.model
         self._base_url = provider.base_url
+        self._org_id = org_id
+        self._user_id = user_id
 
     def extract(self, events: list[dict[str, Any]]) -> list[Candidate]:
         if not events:
@@ -131,6 +136,8 @@ class LlmExtractor:
             ],
             providers=self._providers,
             http=self._http,
+            org_id=self._org_id,
+            user_id=self._user_id,
         )
         if not payload:
             logger.warning("LLM extract failed; using heuristic fallback")

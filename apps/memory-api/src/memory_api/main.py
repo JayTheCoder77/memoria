@@ -7,9 +7,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from memory_api.config import settings
 from memory_api.observability.logging import configure_logging
+from memory_api.observability.metrics import render_metrics
 from memory_api.observability.middleware import RequestLoggingMiddleware
 from memory_api.routers import api_keys, auth, events, health, indexes, memories
 from memory_api.services.embedding import get_embedder
@@ -57,6 +59,14 @@ if origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    body, content_type = render_metrics()
+    return Response(content=body, media_type=content_type)
+
+
 app.include_router(health.router)
 app.include_router(auth.router)
 app.include_router(api_keys.router)
