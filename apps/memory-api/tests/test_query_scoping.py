@@ -12,6 +12,7 @@ def test_search_statement_requires_org_id_in_where_clause() -> None:
     stmt = search_statement(
         org_id=org_id,
         query_embedding=[0.0] * EMBEDDING_DIM,
+        embedding_model="hash",
         session_id="repo-memoria",
         limit=5,
     )

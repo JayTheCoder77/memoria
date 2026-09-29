@@ -75,6 +75,7 @@ def persist_candidate(
     matches = repo.similar(
         org_id=org_id,
         query_embedding=embedding,
+        embedding_model=embedder.model_name,
         session_id=session_id,
         limit=1,
     )
@@ -92,5 +93,6 @@ def persist_candidate(
         embedding=embedding,
         importance=candidate.importance,
         source_metadata=candidate.source_metadata,
+        embedding_model=embedder.model_name,
     )
     return memory, True

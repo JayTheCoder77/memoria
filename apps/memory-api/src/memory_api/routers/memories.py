@@ -227,6 +227,8 @@ def update_memory(
     if body.content is not None:
         memory.content = body.content
         memory.embedding = embed_text(body.content, embedder=embedder)
+        memory.embedding_model = embedder.model_name
+        memory.embedding_version += 1
     if body.importance is not None:
         memory.importance = body.importance
     if body.memory_type is not None:

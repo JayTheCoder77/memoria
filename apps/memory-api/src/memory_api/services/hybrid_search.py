@@ -247,6 +247,7 @@ class HybridRetriever:
                         query_embedding,
                         session_id=session_id,
                         limit=limit,
+                        embedding_model=self._embedder.model_name,
                     )
                 finally:
                     if session is not None:

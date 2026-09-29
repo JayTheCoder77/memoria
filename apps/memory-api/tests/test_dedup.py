@@ -166,6 +166,7 @@ def test_dedup_lookup_does_not_count_as_recall() -> None:
     similar = repo.similar(
         org_id=org_id,
         query_embedding=embed_text("unique fact", embedder=embedder),
+        embedding_model=embedder.model_name,
         session_id="s1",
         limit=1,
     )

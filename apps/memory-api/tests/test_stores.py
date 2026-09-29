@@ -219,7 +219,13 @@ def test_vector_store_search_delegates_to_repository() -> None:
     )
     store = PostgresVectorStore(repo)
     store.upsert(memory.id, memory.embedding, {})
-    hits = store.search(org_id, [1.0, 0.0, 0.0], session_id="s1", limit=5)
+    hits = store.search(
+        org_id,
+        [1.0, 0.0, 0.0],
+        session_id="s1",
+        limit=5,
+        embedding_model="hash",
+    )
     assert len(hits) == 1
     assert hits[0].memory.id == memory.id
     assert hits[0].similarity == 1.0

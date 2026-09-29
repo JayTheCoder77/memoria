@@ -15,11 +15,15 @@ _HF_ROUTER = "https://router.huggingface.co/hf-inference/models"
 
 
 class Embedder(Protocol):
+    model_name: str
+
     def embed(self, text: str) -> list[float]: ...
 
 
 class HashEmbedder:
     """Deterministic 384-d embedder used in tests and as the default local fallback."""
+
+    model_name = "hash"
 
     def embed(self, text: str) -> list[float]:
         seed = text.encode("utf-8")
@@ -38,6 +42,7 @@ class HashEmbedder:
 class MiniLMEmbedder:
     """In-process all-MiniLM-L6-v2 embedder. Enable with MEMORIA_EMBEDDER=minilm."""
 
+    model_name = "minilm"
     _model = None
 
     def embed(self, text: str) -> list[float]:
@@ -89,6 +94,10 @@ class HuggingFaceEmbedder:
         self._http = http or httpx.Client(timeout=60.0)
         self._sleep = sleep
         self._retries = retries
+
+    @property
+    def model_name(self) -> str:
+        return self._model
 
     def embed(self, text: str) -> list[float]:
         if not self._token:

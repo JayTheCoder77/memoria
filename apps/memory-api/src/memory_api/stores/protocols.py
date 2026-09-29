@@ -17,6 +17,7 @@ class VectorStore(Protocol):
         *,
         session_id: str | None,
         limit: int,
+        embedding_model: str,
     ) -> list[ScoredMemory]: ...
 
 

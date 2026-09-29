@@ -21,6 +21,8 @@ class MemoryRepository(Protocol):
         embedding: list[float],
         importance: float,
         source_metadata: dict,
+        embedding_model: str = "hash",
+        embedding_version: int = 1,
     ) -> Memory: ...
 
     def search(
@@ -28,6 +30,7 @@ class MemoryRepository(Protocol):
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]: ...
@@ -37,6 +40,7 @@ class MemoryRepository(Protocol):
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]: ...
@@ -59,11 +63,15 @@ def search_statement(
     *,
     org_id: uuid.UUID,
     query_embedding: list[float],
+    embedding_model: str,
     session_id: str | None = None,
     limit: int = 10,
 ) -> Select:
     distance = Memory.embedding.cosine_distance(query_embedding)
-    stmt = select(Memory, distance.label("distance")).where(Memory.org_id == org_id)
+    stmt = select(Memory, distance.label("distance")).where(
+        Memory.org_id == org_id,
+        Memory.embedding_model == embedding_model,
+    )
     if session_id is not None:
         stmt = stmt.where(Memory.session_id == session_id)
     return stmt.order_by(distance).limit(limit)
@@ -93,6 +101,8 @@ class PostgresMemoryRepository:
         embedding: list[float],
         importance: float,
         source_metadata: dict,
+        embedding_model: str = "hash",
+        embedding_version: int = 1,
     ) -> Memory:
         memory = Memory(
             org_id=org_id,
@@ -102,6 +112,8 @@ class PostgresMemoryRepository:
             embedding=embedding,
             importance=importance,
             source_metadata=source_metadata,
+            embedding_model=embedding_model,
+            embedding_version=embedding_version,
         )
         self._session.add(memory)
         self._session.flush()
@@ -112,6 +124,7 @@ class PostgresMemoryRepository:
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]:
@@ -119,6 +132,7 @@ class PostgresMemoryRepository:
             search_statement(
                 org_id=org_id,
                 query_embedding=query_embedding,
+                embedding_model=embedding_model,
                 session_id=session_id,
                 limit=limit,
             )
@@ -135,6 +149,7 @@ class PostgresMemoryRepository:
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]:
@@ -142,6 +157,7 @@ class PostgresMemoryRepository:
             search_statement(
                 org_id=org_id,
                 query_embedding=query_embedding,
+                embedding_model=embedding_model,
                 session_id=session_id,
                 limit=limit,
             )
@@ -194,6 +210,8 @@ class InMemoryMemoryRepository:
         embedding: list[float],
         importance: float,
         source_metadata: dict,
+        embedding_model: str = "hash",
+        embedding_version: int = 1,
     ) -> Memory:
         memory = Memory(
             id=uuid.uuid4(),
@@ -204,6 +222,8 @@ class InMemoryMemoryRepository:
             embedding=list(embedding),
             importance=importance,
             source_metadata=source_metadata,
+            embedding_model=embedding_model,
+            embedding_version=embedding_version,
             access_count=0,
             created_at=datetime.now(UTC),
         )
@@ -215,10 +235,15 @@ class InMemoryMemoryRepository:
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]:
-        candidates = [row for row in self._rows if row.org_id == org_id]
+        candidates = [
+            row
+            for row in self._rows
+            if row.org_id == org_id and row.embedding_model == embedding_model
+        ]
         if session_id is not None:
             candidates = [row for row in candidates if row.session_id == session_id]
         ranked = sorted(
@@ -237,10 +262,15 @@ class InMemoryMemoryRepository:
         *,
         org_id: uuid.UUID,
         query_embedding: list[float],
+        embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
     ) -> list[tuple[Memory, float]]:
-        candidates = [row for row in self._rows if row.org_id == org_id]
+        candidates = [
+            row
+            for row in self._rows
+            if row.org_id == org_id and row.embedding_model == embedding_model
+        ]
         if session_id is not None:
             candidates = [row for row in candidates if row.session_id == session_id]
         ranked = sorted(

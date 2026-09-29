@@ -42,6 +42,8 @@ def _attribute_text(span) -> str:
 
 
 class _LoggingEmbedder:
+    model_name = "hash"
+
     def embed(self, text: str) -> list[float]:
         structlog.get_logger().info("during_embed")
         return HashEmbedder().embed(text)

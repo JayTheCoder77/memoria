@@ -34,5 +34,10 @@ def test_in_memory_search_is_scoped_to_org() -> None:
         source_metadata={},
     )
 
-    hits = repo.search(org_id=org_a, query_embedding=embedding, session_id="s1")
+    hits = repo.search(
+        org_id=org_a,
+        query_embedding=embedding,
+        embedding_model=embedder.model_name,
+        session_id="s1",
+    )
     assert [memory.id for memory, _score in hits] == [kept.id]

@@ -22,12 +22,14 @@ class PostgresVectorStore:
         *,
         session_id: str | None,
         limit: int,
+        embedding_model: str,
     ) -> list[ScoredMemory]:
         rows = self._repo.search(
             org_id=org_id,
             query_embedding=query_embedding,
             session_id=session_id,
             limit=limit,
+            embedding_model=embedding_model,
         )
         return [
             ScoredMemory(memory=memory, similarity=similarity)

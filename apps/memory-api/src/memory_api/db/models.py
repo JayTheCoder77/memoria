@@ -105,6 +105,8 @@ class Memory(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(Text, nullable=False, default="hash")
+    embedding_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
