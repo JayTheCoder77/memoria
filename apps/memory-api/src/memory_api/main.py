@@ -9,9 +9,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from memory_api.config import settings
+from memory_api.observability.logging import configure_logging
+from memory_api.observability.middleware import RequestLoggingMiddleware
 from memory_api.routers import api_keys, auth, events, health, indexes, memories
 from memory_api.services.embedding import get_embedder
 from memory_api.worker import tick
+
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +47,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Memoria Memory API", lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
 origins = [item.strip() for item in settings.cors_origins.split(",") if item.strip()]
 if origins:
     app.add_middleware(

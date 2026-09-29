@@ -14,6 +14,7 @@ from memory_api.services.session_tokens import SessionTokenError, decode_session
 
 
 def get_principal(
+    request: Request,
     authorization: str | None = Header(default=None),
     store: ApiKeyStore = Depends(get_api_key_store),
     limiter: SlidingWindowRateLimiter = Depends(get_rate_limiter),
@@ -32,6 +33,7 @@ def get_principal(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Rate limit exceeded",
         ) from exc
+    request.state.org_id = principal.org_id
     return principal
 
 
@@ -92,6 +94,7 @@ def get_org_scope(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="Rate limit exceeded",
                 ) from exc
+            request.state.org_id = principal.org_id
             return principal.org_id
     user = get_session_user(
         request=request,
@@ -99,4 +102,5 @@ def get_org_scope(
         identities=identities,
         memoria_session=memoria_session,
     )
+    request.state.org_id = user.org_id
     return user.org_id
