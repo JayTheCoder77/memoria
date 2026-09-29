@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
 from memory_api.auth import get_org_scope, get_principal
 from memory_api.config import settings
@@ -30,7 +31,7 @@ from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.org_llm import org_chat_providers
 from memory_api.services.scoring import fused_relevance
-from memory_api.services.webhooks import deliver_memory_written, webhook_store_for
+from memory_api.services.webhooks import collect_memory_written, post_webhooks, webhook_store_for
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
 router = APIRouter()
@@ -137,12 +138,16 @@ def create_memory(
         session=getattr(repo, "_session", None),
     )
     if _inserted:
-        deliver_memory_written(
+        pending = collect_memory_written(
             webhook_store_for(repo),
             memory_id=memory.id,
             org_id=memory.org_id,
             user_id=memory.user_id,
         )
+        session = getattr(repo, "_session", None)
+        if isinstance(session, Session):
+            session.commit()
+        post_webhooks(pending)
     return _to_out(memory)
 
 

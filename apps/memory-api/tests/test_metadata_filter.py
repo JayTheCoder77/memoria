@@ -113,3 +113,53 @@ def test_dolphin_metadata_does_not_return_a_memory_tagged_cursor(
     assert "memories.embedding_model" in compiled
     assert "source_metadata" in compiled
     assert "@>" in compiled
+
+
+def test_array_containment_keeps_a_memory_tagged_with_a_superset(
+    client: TestClient, raw_key: str
+) -> None:
+    superset = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "meta-tags",
+            "memory_type": "semantic",
+            "content": "memory tagged with both labels",
+            "source_metadata": {"tags": ["a", "b"]},
+        },
+    )
+    other = client.post(
+        "/memories",
+        headers=_auth(raw_key),
+        json={
+            "session_id": "meta-tags",
+            "memory_type": "semantic",
+            "content": "memory tagged with a different label",
+            "source_metadata": {"tags": ["c"]},
+        },
+    )
+    assert superset.status_code == 201
+    assert other.status_code == 201
+    superset_id = superset.json()["id"]
+    other_id = other.json()["id"]
+    metadata = json.dumps({"tags": ["a"]})
+
+    search = client.get(
+        "/memories/search",
+        headers=_auth(raw_key),
+        params={"q": "memory", "metadata": metadata},
+    )
+    assert search.status_code == 200
+    search_ids = {row["id"] for row in search.json()["memories"]}
+    assert superset_id in search_ids
+    assert other_id not in search_ids
+
+    listed = client.get(
+        "/memories",
+        headers=_auth(raw_key),
+        params={"metadata": metadata},
+    )
+    assert listed.status_code == 200
+    listed_ids = {row["id"] for row in listed.json()["memories"]}
+    assert superset_id in listed_ids
+    assert other_id not in listed_ids

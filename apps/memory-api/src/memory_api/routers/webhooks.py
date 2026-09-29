@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import uuid
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, field_validator
@@ -10,7 +9,7 @@ from memory_api.auth import get_principal
 from memory_api.db.deps import get_repository
 from memory_api.db.repository import MemoryRepository
 from memory_api.services.api_keys import Principal
-from memory_api.services.webhooks import webhook_store_for
+from memory_api.services.webhooks import public_https_webhook_url, webhook_store_for
 
 router = APIRouter()
 
@@ -22,10 +21,7 @@ class WebhookCreate(BaseModel):
     @field_validator("url")
     @classmethod
     def _url(cls, value: str) -> str:
-        parsed = urlparse(value)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            raise ValueError("url must be http or https")
-        return value
+        return public_https_webhook_url(value)
 
     @field_validator("events")
     @classmethod

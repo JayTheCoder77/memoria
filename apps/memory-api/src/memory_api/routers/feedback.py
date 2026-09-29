@@ -89,9 +89,21 @@ class PostgresFeedbackStore:
         try:
             with self._session.begin_nested():
                 self._session.flush()
-        except IntegrityError:
-            return False
+        except IntegrityError as exc:
+            if is_duplicate_vote(exc):
+                return False
+            raise
         return True
+
+
+def is_duplicate_vote(exc: IntegrityError) -> bool:
+    orig = exc.orig
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    if sqlstate == "23505":
+        return True
+    diag = getattr(orig, "diag", None)
+    constraint = getattr(diag, "constraint_name", None) if diag is not None else None
+    return constraint == "uq_memory_feedback_memory_api_key"
 
 
 _in_memory_feedback = InMemoryFeedbackStore()
@@ -117,6 +129,11 @@ def submit_feedback(
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
 ) -> MemoryOut:
+    if principal.api_key_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key",
+        )
     memory = repo.get(org_id=principal.org_id, memory_id=memory_id)
     if memory is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Memory not found")

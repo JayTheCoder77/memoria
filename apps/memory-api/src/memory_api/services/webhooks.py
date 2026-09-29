@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import secrets
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select
@@ -122,6 +124,83 @@ def webhook_store_for(repo: MemoryRepository) -> WebhookStore:
     return PostgresWebhookStore(session)
 
 
+def _blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    mapped = getattr(address, "ipv4_mapped", None)
+    if mapped is not None and _blocked_address(mapped):
+        return True
+    return not address.is_global
+
+
+def public_https_webhook_url(url: str) -> str:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not host or host == "localhost" or host.endswith(".localhost"):
+        raise ValueError("url must be a public https address")
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return url
+    if _blocked_address(address):
+        raise ValueError("url must be a public https address")
+    return url
+
+
+@dataclass(frozen=True)
+class PendingWebhook:
+    org_id: uuid.UUID
+    webhook_id: uuid.UUID
+    url: str
+    secret: str
+    body: bytes
+
+
+def collect_memory_written(
+    store: WebhookStore,
+    *,
+    memory_id: uuid.UUID,
+    org_id: uuid.UUID,
+    user_id: str | None,
+) -> list[PendingWebhook]:
+    try:
+        endpoints = store.for_event(org_id, "memory.written")
+    except Exception:
+        logger.error("webhook lookup failed org_id=%s", org_id)
+        return []
+    body = memory_written_body(memory_id=memory_id, org_id=org_id, user_id=user_id)
+    return [
+        PendingWebhook(
+            org_id=org_id,
+            webhook_id=endpoint.id,
+            url=endpoint.url,
+            secret=endpoint.secret,
+            body=body,
+        )
+        for endpoint in endpoints
+    ]
+
+
+def post_webhooks(pending: list[PendingWebhook]) -> None:
+    for item in pending:
+        try:
+            response = httpx.post(
+                item.url,
+                content=item.body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Memoria-Signature": sign_body(item.secret, item.body),
+                },
+                timeout=_DELIVERY_TIMEOUT_SECONDS,
+            )
+            response.raise_for_status()
+        except Exception as exc:
+            logger.error(
+                "webhook delivery failed org_id=%s webhook_id=%s error=%s",
+                item.org_id,
+                item.webhook_id,
+                type(exc).__name__,
+            )
+
+
 def sign_body(secret: str, body: bytes) -> str:
     return hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
 
@@ -148,29 +227,11 @@ def deliver_memory_written(
     org_id: uuid.UUID,
     user_id: str | None,
 ) -> None:
-    try:
-        endpoints = store.for_event(org_id, "memory.written")
-    except Exception:
-        logger.error("webhook lookup failed org_id=%s", org_id)
-        return
-    body = memory_written_body(memory_id=memory_id, org_id=org_id, user_id=user_id)
-    for endpoint in endpoints:
-        signature = sign_body(endpoint.secret, body)
-        try:
-            response = httpx.post(
-                endpoint.url,
-                content=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "X-Memoria-Signature": signature,
-                },
-                timeout=_DELIVERY_TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
-        except Exception as exc:
-            logger.error(
-                "webhook delivery failed org_id=%s webhook_id=%s error=%s",
-                org_id,
-                endpoint.id,
-                type(exc).__name__,
-            )
+    post_webhooks(
+        collect_memory_written(
+            store,
+            memory_id=memory_id,
+            org_id=org_id,
+            user_id=user_id,
+        )
+    )

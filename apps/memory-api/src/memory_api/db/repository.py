@@ -97,21 +97,34 @@ def search_statement(
     return stmt.order_by(distance).limit(limit)
 
 
+def jsonb_contains(container: object, contained: object) -> bool:
+    """PostgreSQL jsonb `@>` for objects, arrays, and scalars."""
+    if isinstance(contained, dict):
+        if not isinstance(container, dict):
+            return False
+        return all(
+            key in container and jsonb_contains(container[key], value)
+            for key, value in contained.items()
+        )
+    if isinstance(contained, list):
+        if not isinstance(container, list):
+            return False
+        return all(
+            any(jsonb_contains(item, element) for item in container) for element in contained
+        )
+    if isinstance(container, bool) or isinstance(contained, bool):
+        return (
+            isinstance(container, bool)
+            and isinstance(contained, bool)
+            and container == contained
+        )
+    return container == contained
+
+
 def metadata_contains(document: object, subset: dict | None) -> bool:
     if not subset:
         return True
-    if not isinstance(document, dict):
-        return False
-    for key, expected in subset.items():
-        if key not in document:
-            return False
-        actual = document[key]
-        if isinstance(expected, dict):
-            if not metadata_contains(actual, expected):
-                return False
-        elif actual != expected:
-            return False
-    return True
+    return jsonb_contains(document, subset)
 
 
 def _touch(memory: Memory) -> None:

@@ -11,7 +11,12 @@ from memory_api.services.embedding import Embedder
 from memory_api.services.extraction import Extractor
 from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.kv_fanout import persist_kv_facts
-from memory_api.services.webhooks import deliver_memory_written, webhook_store_for
+from memory_api.services.webhooks import (
+    PendingWebhook,
+    collect_memory_written,
+    post_webhooks,
+    webhook_store_for,
+)
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.protocols import GraphStore, KVStore
 
@@ -45,9 +50,11 @@ def run_once(
     kv: KVStore | None = None,
     graph: GraphStore | None = None,
     group_window_seconds: int = 120,
+    deliveries: list[PendingWebhook] | None = None,
 ) -> int:
     kv = kv or NoOpKVStore()
     graph = graph or NoOpGraphStore()
+    pending = deliveries if deliveries is not None else []
     claimed = events.claim_ready(batch_size, group_window_seconds=group_window_seconds)
     if not claimed:
         return 0
@@ -69,11 +76,14 @@ def run_once(
                 threshold=threshold,
                 kv=kv,
                 graph=graph,
+                deliveries=pending,
             )
     except Exception:
         events.mark_failed(claimed)
         raise
     events.mark_processed(claimed)
+    if deliveries is None and getattr(repo, "_session", None) is None:
+        post_webhooks(pending)
     return created
 
 
@@ -86,6 +96,7 @@ def _process(
     threshold: float,
     kv: KVStore,
     graph: GraphStore,
+    deliveries: list[PendingWebhook],
 ) -> int:
     payload = [
         {"event_type": row.event_type, "payload": row.payload, "id": str(row.id)}
@@ -120,11 +131,13 @@ def _process(
             session=getattr(repo, "_session", None),
         )
         if inserted:
-            deliver_memory_written(
-                webhook_store_for(repo),
-                memory_id=memory.id,
-                org_id=memory.org_id,
-                user_id=memory.user_id,
+            deliveries.extend(
+                collect_memory_written(
+                    webhook_store_for(repo),
+                    memory_id=memory.id,
+                    org_id=memory.org_id,
+                    user_id=memory.user_id,
+                )
             )
             created += 1
     return created
