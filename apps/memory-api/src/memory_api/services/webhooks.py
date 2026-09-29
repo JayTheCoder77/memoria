@@ -6,6 +6,7 @@ import ipaddress
 import json
 import logging
 import secrets
+import socket
 import uuid
 from dataclasses import dataclass
 from typing import Protocol
@@ -124,6 +125,10 @@ def webhook_store_for(repo: MemoryRepository) -> WebhookStore:
     return PostgresWebhookStore(session)
 
 
+class WebhookURLError(ValueError):
+    pass
+
+
 def _blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     mapped = getattr(address, "ipv4_mapped", None)
     if mapped is not None and _blocked_address(mapped):
@@ -131,17 +136,33 @@ def _blocked_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> 
     return not address.is_global
 
 
+def resolve_webhook_host(host: str) -> list[str]:
+    infos = socket.getaddrinfo(host, None)
+    return [str(sockaddr[0]).split("%", 1)[0] for *_, sockaddr in infos]
+
+
+def _resolved_addresses(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    try:
+        return [ipaddress.ip_address(host)]
+    except ValueError:
+        pass
+    try:
+        raw_addresses = resolve_webhook_host(host)
+    except OSError as exc:
+        raise WebhookURLError("webhook host did not resolve") from exc
+    if not raw_addresses:
+        raise WebhookURLError("webhook host did not resolve")
+    return [ipaddress.ip_address(ip) for ip in raw_addresses]
+
+
 def public_https_webhook_url(url: str) -> str:
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
     if parsed.scheme != "https" or not host or host == "localhost" or host.endswith(".localhost"):
-        raise ValueError("url must be a public https address")
-    try:
-        address = ipaddress.ip_address(host)
-    except ValueError:
-        return url
-    if _blocked_address(address):
-        raise ValueError("url must be a public https address")
+        raise WebhookURLError("url must be a public https address")
+    for address in _resolved_addresses(host):
+        if _blocked_address(address):
+            raise WebhookURLError("url must be a public https address")
     return url
 
 
@@ -181,6 +202,16 @@ def collect_memory_written(
 
 def post_webhooks(pending: list[PendingWebhook]) -> None:
     for item in pending:
+        try:
+            public_https_webhook_url(item.url)
+        except Exception as exc:
+            logger.error(
+                "webhook delivery failed org_id=%s webhook_id=%s error=%s",
+                item.org_id,
+                item.webhook_id,
+                type(exc).__name__,
+            )
+            continue
         try:
             response = httpx.post(
                 item.url,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import threading
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -58,6 +59,30 @@ def client(repo: InMemoryMemoryRepository, keys: InMemoryApiKeyStore) -> TestCli
 
 def _auth(raw_key: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {raw_key}"}
+
+
+@pytest.fixture(autouse=True)
+def _public_webhook_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "memory_api.services.webhooks.resolve_webhook_host",
+        lambda _host: ["1.1.1.1"],
+    )
+
+
+@pytest.mark.parametrize("address", ["127.0.0.1", "169.254.169.254"])
+def test_hostname_resolving_to_non_global_address_is_rejected(
+    client: TestClient, raw_key: str, monkeypatch: pytest.MonkeyPatch, address: str
+) -> None:
+    monkeypatch.setattr(
+        "memory_api.services.webhooks.resolve_webhook_host",
+        lambda _host: [address],
+    )
+    rejected = client.post(
+        "/webhooks",
+        headers=_auth(raw_key),
+        json={"url": "https://metadata.google.internal/hook", "events": ["memory.written"]},
+    )
+    assert rejected.status_code == 422
 
 
 def test_private_or_http_webhook_url_is_rejected(client: TestClient, raw_key: str) -> None:
@@ -140,8 +165,52 @@ def test_remember_posts_webhook_after_commit(
     assert events == ["commit", "post"]
 
 
+def test_delivery_skips_a_host_that_resolves_to_a_private_address(
+    client: TestClient,
+    raw_key: str,
+    org_id: uuid.UUID,
+    repo: InMemoryMemoryRepository,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    seeded = webhook_store_for(repo).create(
+        org_id=org_id,
+        url="https://metadata.google.internal/hook",
+        events=["memory.written"],
+    )
+    monkeypatch.setattr(
+        "memory_api.services.webhooks.resolve_webhook_host",
+        lambda _host: ["169.254.169.254"],
+    )
+    posted: list[str] = []
+    monkeypatch.setattr(
+        "memory_api.services.webhooks.httpx.post",
+        lambda *_args, **_kwargs: posted.append("post"),
+    )
+    content = "delivery log must not include this memory text"
+    with caplog.at_level(logging.ERROR):
+        created = client.post(
+            "/memories",
+            headers=_auth(raw_key),
+            json={
+                "session_id": "hooks",
+                "memory_type": "semantic",
+                "content": content,
+            },
+        )
+    assert created.status_code == 201
+    assert posted == []
+    assert content not in caplog.text
+    assert str(org_id) in caplog.text
+    assert str(seeded.id) in caplog.text
+
+
 def test_webhook_receiver_records_signature_and_remember_returns_201_on_500(
-    client: TestClient, raw_key: str, org_id: uuid.UUID, repo: InMemoryMemoryRepository
+    client: TestClient,
+    raw_key: str,
+    org_id: uuid.UUID,
+    repo: InMemoryMemoryRepository,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorded: list[dict[str, object]] = []
 
@@ -166,6 +235,10 @@ def test_webhook_receiver_records_signature_and_remember_returns_201_on_500(
     thread.start()
     try:
         port = server.server_address[1]
+        monkeypatch.setattr(
+            "memory_api.services.webhooks.public_https_webhook_url",
+            lambda url: url,
+        )
         seeded = webhook_store_for(repo).create(
             org_id=org_id,
             url=f"http://127.0.0.1:{port}/hook",
