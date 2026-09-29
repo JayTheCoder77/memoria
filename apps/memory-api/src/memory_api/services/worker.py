@@ -11,6 +11,7 @@ from memory_api.services.embedding import Embedder
 from memory_api.services.extraction import Extractor
 from memory_api.services.graph_fanout import persist_graph_facts
 from memory_api.services.kv_fanout import persist_kv_facts
+from memory_api.services.webhooks import deliver_memory_written, webhook_store_for
 from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.protocols import GraphStore, KVStore
 
@@ -119,5 +120,11 @@ def _process(
             session=getattr(repo, "_session", None),
         )
         if inserted:
+            deliver_memory_written(
+                webhook_store_for(repo),
+                memory_id=memory.id,
+                org_id=memory.org_id,
+                user_id=memory.user_id,
+            )
             created += 1
     return created

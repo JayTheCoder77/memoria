@@ -38,6 +38,7 @@ class MemoryRepository(Protocol):
         limit: int = 10,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[tuple[Memory, float]]: ...
 
     def similar(
@@ -61,6 +62,7 @@ class MemoryRepository(Protocol):
         q: str | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[Memory]: ...
 
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None: ...
@@ -77,6 +79,7 @@ def search_statement(
     limit: int = 10,
     user_id: str | None = None,
     agent_id: str | None = None,
+    metadata: dict | None = None,
 ) -> Select:
     distance = Memory.embedding.cosine_distance(query_embedding)
     stmt = select(Memory, distance.label("distance")).where(
@@ -89,7 +92,26 @@ def search_statement(
         stmt = stmt.where(Memory.user_id == user_id)
     if agent_id is not None:
         stmt = stmt.where(Memory.agent_id == agent_id)
+    if metadata:
+        stmt = stmt.where(Memory.source_metadata.contains(metadata))
     return stmt.order_by(distance).limit(limit)
+
+
+def metadata_contains(document: object, subset: dict | None) -> bool:
+    if not subset:
+        return True
+    if not isinstance(document, dict):
+        return False
+    for key, expected in subset.items():
+        if key not in document:
+            return False
+        actual = document[key]
+        if isinstance(expected, dict):
+            if not metadata_contains(actual, expected):
+                return False
+        elif actual != expected:
+            return False
+    return True
 
 
 def _touch(memory: Memory) -> None:
@@ -148,6 +170,7 @@ class PostgresMemoryRepository:
         limit: int = 10,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[tuple[Memory, float]]:
         rows = self._session.execute(
             search_statement(
@@ -158,6 +181,7 @@ class PostgresMemoryRepository:
                 limit=limit,
                 user_id=user_id,
                 agent_id=agent_id,
+                metadata=metadata,
             )
         ).all()
         results: list[tuple[Memory, float]] = []
@@ -200,6 +224,7 @@ class PostgresMemoryRepository:
         q: str | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[Memory]:
         stmt = select(Memory).where(Memory.org_id == org_id)
         if session_id is not None:
@@ -212,6 +237,8 @@ class PostgresMemoryRepository:
             stmt = stmt.where(Memory.user_id == user_id)
         if agent_id is not None:
             stmt = stmt.where(Memory.agent_id == agent_id)
+        if metadata:
+            stmt = stmt.where(Memory.source_metadata.contains(metadata))
         stmt = stmt.order_by(Memory.created_at.desc())
         return list(self._session.scalars(stmt))
 
@@ -277,6 +304,7 @@ class InMemoryMemoryRepository:
         limit: int = 10,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[tuple[Memory, float]]:
         candidates = [
             row
@@ -286,6 +314,7 @@ class InMemoryMemoryRepository:
             and scope_matches(
                 row.user_id, row.agent_id, user_id=user_id, agent_id=agent_id
             )
+            and metadata_contains(row.source_metadata, metadata)
         ]
         if session_id is not None:
             candidates = [row for row in candidates if row.session_id == session_id]
@@ -340,6 +369,7 @@ class InMemoryMemoryRepository:
         q: str | None = None,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[Memory]:
         rows = [
             row
@@ -348,6 +378,7 @@ class InMemoryMemoryRepository:
             and scope_matches(
                 row.user_id, row.agent_id, user_id=user_id, agent_id=agent_id
             )
+            and metadata_contains(row.source_metadata, metadata)
         ]
         if session_id is not None:
             rows = [row for row in rows if row.session_id == session_id]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 
@@ -29,9 +30,28 @@ from memory_api.services.hybrid_triples import enrich_hybrid_triples
 from memory_api.services.kv_fanout import persist_kv_facts
 from memory_api.services.org_llm import org_chat_providers
 from memory_api.services.scoring import fused_relevance
+from memory_api.services.webhooks import deliver_memory_written, webhook_store_for
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
 router = APIRouter()
+
+
+def _parse_metadata(raw: str | None) -> dict | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="metadata must be a JSON object",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="metadata must be a JSON object",
+        )
+    return parsed
 
 
 def _parse_scope(user_id: str | None, agent_id: str | None) -> tuple[str | None, str | None]:
@@ -116,6 +136,13 @@ def create_memory(
         candidate=candidate,
         session=getattr(repo, "_session", None),
     )
+    if _inserted:
+        deliver_memory_written(
+            webhook_store_for(repo),
+            memory_id=memory.id,
+            org_id=memory.org_id,
+            user_id=memory.user_id,
+        )
     return _to_out(memory)
 
 
@@ -130,6 +157,7 @@ def search(
     as_of: datetime | None = None,
     user_id: str | None = None,
     agent_id: str | None = None,
+    metadata: str | None = None,
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
@@ -154,6 +182,7 @@ def search(
         user_id=user_id,
         agent_id=agent_id,
         rerank=rerank,
+        metadata=_parse_metadata(metadata),
     )
 
     def _hit(item: RankedHit) -> MemoryOut:
@@ -207,6 +236,7 @@ def list_memories(
     q: str | None = None,
     user_id: str | None = None,
     agent_id: str | None = None,
+    metadata: str | None = None,
     org_id: uuid.UUID = Depends(get_org_scope),
     repo: MemoryRepository = Depends(get_repository),
 ) -> MemorySearchResponse:
@@ -218,6 +248,7 @@ def list_memories(
         q=q,
         user_id=user_id,
         agent_id=agent_id,
+        metadata=_parse_metadata(metadata),
     )
     return MemorySearchResponse(memories=[_to_out(memory) for memory in rows])
 

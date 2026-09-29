@@ -9,7 +9,11 @@ from datetime import datetime
 
 from memory_api.config import settings
 from memory_api.db.models import Memory
-from memory_api.db.repository import MemoryRepository, PostgresMemoryRepository
+from memory_api.db.repository import (
+    MemoryRepository,
+    PostgresMemoryRepository,
+    metadata_contains,
+)
 from memory_api.observability.tracing import start_span
 from memory_api.services.embedding import Embedder, embed_text
 from memory_api.services.graph_seeds import derive_graph_seeds
@@ -144,6 +148,7 @@ class HybridRetriever:
         user_id: str | None = None,
         agent_id: str | None = None,
         rerank: bool = False,
+        metadata: dict | None = None,
     ) -> HybridSearchResult:
         total_started = time.perf_counter()
         embed_started = time.perf_counter()
@@ -159,6 +164,7 @@ class HybridRetriever:
                 vector_limit,
                 user_id,
                 agent_id,
+                metadata,
             )
             kv_future = pool.submit(self._kv_search, org_id, q, user_id, agent_id)
             graph_future = pool.submit(
@@ -188,6 +194,7 @@ class HybridRetriever:
                 lexical=0.0,
             )
             for item in scored
+            if metadata_contains(item.memory.source_metadata, metadata)
         }
 
         for memory_id, lexical_score in lexical_hits:
@@ -199,6 +206,8 @@ class HybridRetriever:
             if memory is None or not _memory_in_scope(
                 memory, session_id=session_id, user_id=user_id, agent_id=agent_id
             ):
+                continue
+            if not metadata_contains(memory.source_metadata, metadata):
                 continue
             union[memory_id] = _Candidate(
                 memory=memory,
@@ -219,6 +228,8 @@ class HybridRetriever:
                 memory, session_id=session_id, user_id=user_id, agent_id=agent_id
             ):
                 continue
+            if not metadata_contains(memory.source_metadata, metadata):
+                continue
             union[fact.memory_id] = _Candidate(
                 memory=memory,
                 similarity=0.0,
@@ -237,6 +248,8 @@ class HybridRetriever:
             if memory is None or not _memory_in_scope(
                 memory, session_id=session_id, user_id=user_id, agent_id=agent_id
             ):
+                continue
+            if not metadata_contains(memory.source_metadata, metadata):
                 continue
             union[memory_id] = _Candidate(
                 memory=memory,
@@ -349,6 +362,7 @@ class HybridRetriever:
         limit: int,
         user_id: str | None,
         agent_id: str | None,
+        metadata: dict | None = None,
     ) -> tuple[list[ScoredMemory], float]:
         started = time.perf_counter()
         with start_span("vector_search", org_id=str(org_id), store="vector"):
@@ -369,6 +383,7 @@ class HybridRetriever:
                         embedding_model=self._embedder.model_name,
                         user_id=user_id,
                         agent_id=agent_id,
+                        metadata=metadata,
                     )
                 finally:
                     if session is not None:

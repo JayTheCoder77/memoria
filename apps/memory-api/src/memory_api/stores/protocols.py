@@ -20,6 +20,7 @@ class VectorStore(Protocol):
         embedding_model: str,
         user_id: str | None = None,
         agent_id: str | None = None,
+        metadata: dict | None = None,
     ) -> list[ScoredMemory]: ...
 
 

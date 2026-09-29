@@ -258,6 +258,41 @@ class GraphEdgeRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class MemoryFeedback(Base):
+    __tablename__ = "memory_feedback"
+    __table_args__ = (
+        UniqueConstraint("memory_id", "api_key_id", name="uq_memory_feedback_memory_api_key"),
+        Index("ix_memory_feedback_org", "org_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False
+    )
+    memory_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
+    )
+    api_key_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("api_keys.id", ondelete="CASCADE"), nullable=False
+    )
+    useful: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class WebhookEndpoint(Base):
+    __tablename__ = "webhook_endpoints"
+    __table_args__ = (Index("ix_webhook_endpoints_org", "org_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("orgs.id", ondelete="CASCADE"), nullable=False
+    )
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    events: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    secret: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
 class LlmUsage(Base):
     __tablename__ = "llm_usage"
     __table_args__ = (Index("ix_llm_usage_org_id", "org_id"),)
