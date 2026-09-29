@@ -36,6 +36,7 @@ def _worker_loop(stop: threading.Event) -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    get_embedder()
     stop = threading.Event()
     thread: threading.Thread | None = None
     if settings.run_worker:
