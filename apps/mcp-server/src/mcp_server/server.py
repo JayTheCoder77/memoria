@@ -7,6 +7,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 from memoria_cloud import Memoria
+from memoria_cloud.client import _raise_for_status
 
 
 def _load_dotenv() -> None:
@@ -110,6 +111,19 @@ def remember(
         user_id=user_id,
         agent_id=agent_id,
     ).model_dump(mode="json")
+
+
+@mcp.tool()
+def profile(user_id: str, token_budget: int = 800) -> dict[str, Any]:
+    """Return scoped profile context: KV facts plus recent important memories."""
+    _api_key()
+    response = client._http.get(
+        "/profile",
+        headers=client._headers(),
+        params={"user_id": user_id, "token_budget": token_budget},
+    )
+    _raise_for_status(response)
+    return response.json()
 
 
 @mcp.tool()
