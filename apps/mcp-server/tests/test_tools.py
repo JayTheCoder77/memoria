@@ -15,6 +15,13 @@ def test_mcp_tools_are_registered() -> None:
     assert "content" in required
     assert "api_key" not in required
     assert "org_id" not in required
+    for name in ("remember", "recall", "emit"):
+        tool = next(item for item in tools if item.name == name)
+        properties = tool.input_schema.get("properties", {})
+        assert "user_id" in properties
+        assert "agent_id" in properties
+        assert "user_id" not in tool.input_schema.get("required", [])
+        assert "agent_id" not in tool.input_schema.get("required", [])
 
 
 def test_mcp_instructions_tell_agent_to_emit_turns() -> None:

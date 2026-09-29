@@ -107,6 +107,8 @@ class Memory(Base):
     embedding: Mapped[list[float]] = mapped_column(Vector(EMBEDDING_DIM), nullable=False)
     embedding_model: Mapped[str] = mapped_column(Text, nullable=False, default="hash")
     embedding_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    user_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
     access_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source_metadata: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -122,7 +124,13 @@ class Memory(Base):
 class KvFact(Base):
     __tablename__ = "kv_facts"
     __table_args__ = (
-        UniqueConstraint("org_id", "fact_type", "entity", name="uq_kv_facts_org_type_entity"),
+        UniqueConstraint(
+            "org_id",
+            "user_id",
+            "fact_type",
+            "entity",
+            name="uq_kv_facts_org_user_type_entity",
+        ),
         Index("idx_kv_facts_org_type", "org_id", "fact_type"),
         Index("idx_kv_facts_memory", "memory_id"),
         Index(
@@ -141,6 +149,8 @@ class KvFact(Base):
         UUID(as_uuid=True), ForeignKey("memories.id", ondelete="CASCADE"), nullable=False
     )
     user_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    agent_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     fact_type: Mapped[str] = mapped_column(Text, nullable=False)
     entity: Mapped[str] = mapped_column(Text, nullable=False)
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -152,7 +162,13 @@ class KvFact(Base):
 class GraphNode(Base):
     __tablename__ = "graph_nodes"
     __table_args__ = (
-        UniqueConstraint("org_id", "entity_key", name="uq_graph_nodes_org_key"),
+        UniqueConstraint(
+            "org_id",
+            "user_id",
+            "agent_id",
+            "entity_key",
+            name="uq_graph_nodes_org_user_agent_key",
+        ),
         Index("idx_graph_nodes_org_key", "org_id", "entity_key"),
     )
 
@@ -161,6 +177,8 @@ class GraphNode(Base):
         UUID(as_uuid=True), ForeignKey("orgs.id"), nullable=False
     )
     entity_key: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    agent_id: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
     label: Mapped[str] = mapped_column(Text, nullable=False)
     properties: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

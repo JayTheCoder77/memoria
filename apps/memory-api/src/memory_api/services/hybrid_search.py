@@ -14,6 +14,7 @@ from memory_api.observability.tracing import start_span
 from memory_api.services.embedding import Embedder, embed_text
 from memory_api.services.graph_seeds import derive_graph_seeds
 from memory_api.services.kv_candidates import derive_kv_candidates
+from memory_api.services.scope import scope_matches
 from memory_api.services.scoring import (
     fused_relevance,
     recency_weight,
@@ -84,6 +85,18 @@ class _Candidate:
     lexical: float
 
 
+def _memory_in_scope(
+    memory: Memory,
+    *,
+    session_id: str | None,
+    user_id: str | None,
+    agent_id: str | None,
+) -> bool:
+    if session_id is not None and memory.session_id != session_id:
+        return False
+    return scope_matches(memory.user_id, memory.agent_id, user_id=user_id, agent_id=agent_id)
+
+
 def _graph_score(graph_hops: int | None) -> float:
     if graph_hops == 1:
         return 1.0
@@ -123,6 +136,8 @@ class HybridRetriever:
         limit: int = 10,
         token_budget: int = 2048,
         as_of: datetime | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> HybridSearchResult:
         total_started = time.perf_counter()
         embed_started = time.perf_counter()
@@ -136,11 +151,21 @@ class HybridRetriever:
                 query_embedding,
                 session_id,
                 vector_limit,
+                user_id,
+                agent_id,
             )
-            kv_future = pool.submit(self._kv_search, org_id, q)
-            graph_future = pool.submit(self._graph_search, org_id, q, as_of)
+            kv_future = pool.submit(self._kv_search, org_id, q, user_id, agent_id)
+            graph_future = pool.submit(
+                self._graph_search, org_id, q, as_of, user_id, agent_id
+            )
             lexical_future = pool.submit(
-                self._lexical_search, org_id, q, session_id, vector_limit
+                self._lexical_search,
+                org_id,
+                q,
+                session_id,
+                vector_limit,
+                user_id,
+                agent_id,
             )
             scored, vector_ms = vector_future.result()
             facts, kv_ms = kv_future.result()
@@ -165,9 +190,9 @@ class HybridRetriever:
                 existing.lexical = lexical_score
                 continue
             memory = self._repo.get(org_id=org_id, memory_id=memory_id)
-            if memory is None:
-                continue
-            if session_id is not None and memory.session_id != session_id:
+            if memory is None or not _memory_in_scope(
+                memory, session_id=session_id, user_id=user_id, agent_id=agent_id
+            ):
                 continue
             union[memory_id] = _Candidate(
                 memory=memory,
@@ -184,9 +209,9 @@ class HybridRetriever:
                 existing.kv_match = 1.0
                 continue
             memory = self._repo.get(org_id=org_id, memory_id=fact.memory_id)
-            if memory is None:
-                continue
-            if session_id is not None and memory.session_id != session_id:
+            if memory is None or not _memory_in_scope(
+                memory, session_id=session_id, user_id=user_id, agent_id=agent_id
+            ):
                 continue
             union[fact.memory_id] = _Candidate(
                 memory=memory,
@@ -203,9 +228,9 @@ class HybridRetriever:
                 existing.graph_hops = hop_count
                 continue
             memory = self._repo.get(org_id=org_id, memory_id=memory_id)
-            if memory is None:
-                continue
-            if session_id is not None and memory.session_id != session_id:
+            if memory is None or not _memory_in_scope(
+                memory, session_id=session_id, user_id=user_id, agent_id=agent_id
+            ):
                 continue
             union[memory_id] = _Candidate(
                 memory=memory,
@@ -272,6 +297,8 @@ class HybridRetriever:
         q: str,
         session_id: str | None,
         limit: int,
+        user_id: str | None,
+        agent_id: str | None,
     ) -> tuple[list[tuple[uuid.UUID, float]], float]:
         started = time.perf_counter()
         with start_span("lexical_search", org_id=str(org_id), store="lexical"):
@@ -290,6 +317,8 @@ class HybridRetriever:
                     session_id=session_id,
                     limit=limit,
                     embedding_model=self._embedder.model_name,
+                    user_id=user_id,
+                    agent_id=agent_id,
                 )
                 return rows, _elapsed_ms(started)
             except Exception as exc:
@@ -308,6 +337,8 @@ class HybridRetriever:
         query_embedding: list[float],
         session_id: str | None,
         limit: int,
+        user_id: str | None,
+        agent_id: str | None,
     ) -> tuple[list[ScoredMemory], float]:
         started = time.perf_counter()
         with start_span("vector_search", org_id=str(org_id), store="vector"):
@@ -326,6 +357,8 @@ class HybridRetriever:
                         session_id=session_id,
                         limit=limit,
                         embedding_model=self._embedder.model_name,
+                        user_id=user_id,
+                        agent_id=agent_id,
                     )
                 finally:
                     if session is not None:
@@ -339,6 +372,8 @@ class HybridRetriever:
         self,
         org_id: uuid.UUID,
         q: str,
+        user_id: str | None,
+        agent_id: str | None,
     ) -> tuple[list[KVFact], float]:
         if not settings.enable_kv:
             return [], 0.0
@@ -354,7 +389,9 @@ class HybridRetriever:
                     session = SessionLocal()
                     store = PostgresKVStore(session)
                 try:
-                    facts = store.search_keys(org_id, candidates)
+                    facts = store.search_keys(
+                        org_id, candidates, user_id=user_id, agent_id=agent_id
+                    )
                 finally:
                     if session is not None:
                         session.close()
@@ -368,6 +405,8 @@ class HybridRetriever:
         org_id: uuid.UUID,
         q: str,
         as_of: datetime | None,
+        user_id: str | None,
+        agent_id: str | None,
     ) -> tuple[dict[uuid.UUID, int], float]:
         if not settings.enable_graph:
             return {}, 0.0
@@ -383,7 +422,14 @@ class HybridRetriever:
                     session = SessionLocal()
                     store = PostgresGraphStore(session)
                 try:
-                    hops_map = store.memory_hops(org_id, seeds, hops=2, as_of=as_of)
+                    hops_map = store.memory_hops(
+                        org_id,
+                        seeds,
+                        hops=2,
+                        as_of=as_of,
+                        user_id=user_id,
+                        agent_id=agent_id,
+                    )
                 finally:
                     if session is not None:
                         session.close()

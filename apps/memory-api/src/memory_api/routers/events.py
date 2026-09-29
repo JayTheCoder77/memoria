@@ -19,12 +19,17 @@ def ingest_event(
     principal: Principal = Depends(get_principal),
     store: EventStore = Depends(get_event_store),
 ) -> JSONResponse:
-    if not should_enqueue(body.event_type, body.payload):
+    payload = dict(body.payload)
+    if body.user_id is not None:
+        payload["user_id"] = body.user_id
+    if body.agent_id is not None:
+        payload["agent_id"] = body.agent_id
+    if not should_enqueue(body.event_type, payload):
         return JSONResponse({"status": "skipped"}, status_code=200)
     row = store.enqueue(
         org_id=principal.org_id,
         session_id=body.session_id,
         event_type=body.event_type,
-        payload=body.payload,
+        payload=payload,
     )
     return JSONResponse({"status": "queued", "id": str(row.id)}, status_code=202)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import uuid
 
 import httpx
@@ -149,6 +150,60 @@ def test_status_errors_are_typed() -> None:
         _client(missing).forget(str(uuid.uuid4()))
     with pytest.raises(MemoriaRateLimitError, match="Rate limit exceeded"):
         _client(limited).recall(q="too many")
+
+
+def test_remember_recall_and_emit_send_optional_user_and_agent() -> None:
+    for method_name in ("remember", "recall", "emit"):
+        params = inspect.signature(getattr(Memoria, method_name)).parameters
+        assert "user_id" in params
+        assert "agent_id" in params
+        assert params["user_id"].default is None
+        assert params["agent_id"].default is None
+
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.method == "POST" and request.url.path == "/memories":
+            return httpx.Response(201, json=_memory_json(), request=request)
+        if request.method == "GET":
+            return httpx.Response(200, json={"memories": []}, request=request)
+        return httpx.Response(
+            202,
+            json={"status": "queued", "id": str(uuid.uuid4())},
+            request=request,
+        )
+
+    client = _client(handler)
+    client.remember(
+        content="scoped",
+        session_id="s1",
+        user_id="  ava  ",
+        agent_id="planner",
+    )
+    body = seen[0].read().decode()
+    assert '"user_id":"ava"' in body or '"user_id": "ava"' in body
+    assert '"agent_id":"planner"' in body or '"agent_id": "planner"' in body
+
+    client.recall(q="scoped", user_id="ava", agent_id="planner")
+    assert seen[1].url.params["user_id"] == "ava"
+    assert seen[1].url.params["agent_id"] == "planner"
+
+    client.emit(
+        session_id="s1",
+        event_type="message",
+        payload={"content": "hello"},
+        user_id="ava",
+        agent_id="planner",
+    )
+    emitted = seen[2].read().decode()
+    assert '"user_id":"ava"' in emitted or '"user_id": "ava"' in emitted
+    assert '"agent_id":"planner"' in emitted or '"agent_id": "planner"' in emitted
+
+    client.remember(content="plain", session_id="s1")
+    plain = seen[3].read().decode()
+    assert "user_id" not in plain
+    assert "agent_id" not in plain
 
 
 def test_missing_api_key_raises(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -28,6 +28,8 @@ def test_kv_fact_model_maps_kv_facts_table() -> None:
         "importance",
         "created_at",
         "updated_at",
+        "user_id",
+        "agent_id",
     }
 
 
@@ -106,6 +108,8 @@ def test_graph_node_model_maps_graph_nodes_table() -> None:
         "label",
         "properties",
         "created_at",
+        "user_id",
+        "agent_id",
     }
 
 

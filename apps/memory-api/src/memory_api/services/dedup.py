@@ -70,6 +70,8 @@ def persist_candidate(
     session_id: str,
     candidate: Candidate,
     threshold: float = DEDUP_THRESHOLD,
+    user_id: str | None = None,
+    agent_id: str | None = None,
 ) -> tuple[Memory, bool]:
     embedding = embed_text(candidate.content, embedder=embedder)
     matches = repo.similar(
@@ -78,10 +80,16 @@ def persist_candidate(
         embedding_model=embedder.model_name,
         session_id=session_id,
         limit=1,
+        user_id=user_id,
+        agent_id=agent_id,
     )
     if matches:
         memory, similarity = matches[0]
-        if _should_merge(similarity, candidate, memory, threshold=threshold):
+        if (
+            memory.user_id == user_id
+            and memory.agent_id == agent_id
+            and _should_merge(similarity, candidate, memory, threshold=threshold)
+        ):
             memory.importance = min(1.0, memory.importance + 0.05)
             memory.access_count += 1
             return memory, False
@@ -94,5 +102,7 @@ def persist_candidate(
         importance=candidate.importance,
         source_metadata=candidate.source_metadata,
         embedding_model=embedder.model_name,
+        user_id=user_id,
+        agent_id=agent_id,
     )
     return memory, True

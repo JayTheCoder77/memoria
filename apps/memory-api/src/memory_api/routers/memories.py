@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 
 from memory_api.auth import get_org_scope, get_principal
 from memory_api.config import settings
@@ -13,6 +14,7 @@ from memory_api.db.repository import MemoryRepository
 from memory_api.schemas.memory import (
     MemoryCreate,
     MemoryOut,
+    MemorySearch,
     MemorySearchResponse,
     MemoryUpdate,
     ScoreDetails,
@@ -30,6 +32,16 @@ from memory_api.services.scoring import fused_relevance
 from memory_api.stores.protocols import GraphStore, KVStore, VectorStore
 
 router = APIRouter()
+
+
+def _parse_scope(user_id: str | None, agent_id: str | None) -> tuple[str | None, str | None]:
+    try:
+        parsed = MemorySearch(q="scope", user_id=user_id, agent_id=agent_id)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.errors()
+        ) from exc
+    return parsed.user_id, parsed.agent_id
 
 
 def _to_out(
@@ -89,6 +101,8 @@ def create_memory(
         session_id=body.session_id,
         candidate=candidate,
         threshold=settings.dedup_threshold,
+        user_id=body.user_id,
+        agent_id=body.agent_id,
     )
     persist_kv_facts(
         kv=kv,
@@ -113,6 +127,8 @@ def search(
     token_budget: int = Query(default=2048, ge=1, le=32_000),
     explain: bool = False,
     as_of: datetime | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
     principal: Principal = Depends(get_principal),
     repo: MemoryRepository = Depends(get_repository),
     embedder: Embedder = Depends(get_embedder),
@@ -120,6 +136,7 @@ def search(
     kv: KVStore = Depends(get_kv_store),
     graph: GraphStore = Depends(get_graph_store),
 ) -> MemorySearchResponse:
+    user_id, agent_id = _parse_scope(user_id, agent_id)
     result = HybridRetriever(
         repo=repo,
         vector=vector,
@@ -133,6 +150,8 @@ def search(
         limit=limit,
         token_budget=token_budget,
         as_of=as_of,
+        user_id=user_id,
+        agent_id=agent_id,
     )
 
     def _hit(item: RankedHit) -> MemoryOut:
@@ -184,14 +203,19 @@ def list_memories(
     session_id: str | None = None,
     memory_type: MemoryType | None = None,
     q: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
     org_id: uuid.UUID = Depends(get_org_scope),
     repo: MemoryRepository = Depends(get_repository),
 ) -> MemorySearchResponse:
+    user_id, agent_id = _parse_scope(user_id, agent_id)
     rows = repo.list(
         org_id=org_id,
         session_id=session_id,
         memory_type=memory_type,
         q=q,
+        user_id=user_id,
+        agent_id=agent_id,
     )
     return MemorySearchResponse(memories=[_to_out(memory) for memory in rows])
 

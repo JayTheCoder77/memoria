@@ -7,6 +7,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 from memory_api.db.models import MemoryType
+from memory_api.services.scope import normalize_scope_id
 
 _MEMORY_TYPE_ALIASES = {
     "preference": MemoryType.semantic,
@@ -46,11 +47,18 @@ class MemoryCreate(BaseModel):
     source_metadata: dict[str, Any] = Field(default_factory=dict)
     kv_triples: list[dict[str, Any]] = Field(default_factory=list)
     graph_triples: list[dict[str, Any]] = Field(default_factory=list)
+    user_id: str | None = None
+    agent_id: str | None = None
 
     @field_validator("memory_type", mode="before")
     @classmethod
     def _memory_type(cls, value: object) -> MemoryType:
         return coerce_memory_type(value)
+
+    @field_validator("user_id", "agent_id", mode="before")
+    @classmethod
+    def _scope_id(cls, value: object) -> str | None:
+        return normalize_scope_id(value)
 
     @field_validator("importance", mode="before")
     @classmethod
@@ -103,6 +111,22 @@ class MemoryOut(BaseModel):
     score_details: ScoreDetails | None = None
 
     model_config = {"from_attributes": True}
+
+
+class MemorySearch(BaseModel):
+    q: str
+    session_id: str | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
+    limit: int = Field(default=10, ge=1, le=100)
+    token_budget: int = Field(default=2048, ge=1, le=32_000)
+    explain: bool = False
+    as_of: datetime | None = None
+
+    @field_validator("user_id", "agent_id", mode="before")
+    @classmethod
+    def _scope_id(cls, value: object) -> str | None:
+        return normalize_scope_id(value)
 
 
 class MemorySearchResponse(BaseModel):

@@ -18,6 +18,8 @@ class VectorStore(Protocol):
         session_id: str | None,
         limit: int,
         embedding_model: str,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[ScoredMemory]: ...
 
 
@@ -32,15 +34,37 @@ class KVStore(Protocol):
         value: str | None,
         importance: float,
         user_key: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> None: ...
 
-    def get(self, org_id: uuid.UUID, fact_type: str, entity: str) -> KVFact | None: ...
+    def get(
+        self,
+        org_id: uuid.UUID,
+        fact_type: str,
+        entity: str,
+        *,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> KVFact | None: ...
 
     def search_keys(
-        self, org_id: uuid.UUID, candidates: list[tuple[str, str]]
+        self,
+        org_id: uuid.UUID,
+        candidates: list[tuple[str, str]],
+        *,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[KVFact]: ...
 
-    def by_org(self, org_id: uuid.UUID, *, user_key: str | None = None) -> list[KVFact]: ...
+    def by_org(
+        self,
+        org_id: uuid.UUID,
+        *,
+        user_key: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> list[KVFact]: ...
 
 
 class GraphStore(Protocol):
@@ -50,6 +74,8 @@ class GraphStore(Protocol):
         entity_key: str,
         label: str,
         properties: dict | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> uuid.UUID: ...
 
     def add_edge(
@@ -61,6 +87,8 @@ class GraphStore(Protocol):
         *,
         memory_id: uuid.UUID | None,
         confidence: float = 1.0,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> uuid.UUID: ...
 
     def neighbors(
@@ -71,10 +99,18 @@ class GraphStore(Protocol):
         hops: int = 1,
         valid_only: bool = True,
         as_of: datetime | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[GraphEdge]: ...
 
     def memories_for_subgraph(
-        self, org_id: uuid.UUID, entity_keys: list[str], *, hops: int = 1
+        self,
+        org_id: uuid.UUID,
+        entity_keys: list[str],
+        *,
+        hops: int = 1,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[uuid.UUID]: ...
 
     def memory_hops(
@@ -84,10 +120,17 @@ class GraphStore(Protocol):
         *,
         hops: int = 2,
         as_of: datetime | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> dict[uuid.UUID, int]: ...
 
     def list_edges(
-        self, org_id: uuid.UUID, *, valid_only: bool = True
+        self,
+        org_id: uuid.UUID,
+        *,
+        valid_only: bool = True,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[GraphEdge]: ...
 
     def reassign_memory(

@@ -23,6 +23,8 @@ class KVFact:
     importance: float
     user_key: str | None = None
     id: uuid.UUID | None = None
+    user_id: str | None = None
+    agent_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -38,3 +40,5 @@ class GraphEdge:
     confidence: float = 1.0
     properties: dict = field(default_factory=dict)
     id: uuid.UUID | None = None
+    user_id: str | None = None
+    agent_id: str | None = None

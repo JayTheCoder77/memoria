@@ -23,6 +23,8 @@ class PostgresVectorStore:
         session_id: str | None,
         limit: int,
         embedding_model: str,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[ScoredMemory]:
         rows = self._repo.search(
             org_id=org_id,
@@ -30,6 +32,8 @@ class PostgresVectorStore:
             session_id=session_id,
             limit=limit,
             embedding_model=embedding_model,
+            user_id=user_id,
+            agent_id=agent_id,
         )
         return [
             ScoredMemory(memory=memory, similarity=similarity)

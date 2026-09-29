@@ -27,6 +27,13 @@ def _detail(response: httpx.Response) -> str:
     return str(payload)
 
 
+def _scope_id(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
+
+
 def _raise_for_status(response: httpx.Response) -> None:
     if response.is_success:
         return
@@ -89,19 +96,28 @@ class Memoria:
         source_metadata: dict[str, Any] | None = None,
         kv_triples: list[dict[str, Any]] | None = None,
         graph_triples: list[dict[str, Any]] | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> Memory:
+        body: dict[str, Any] = {
+            "session_id": session_id,
+            "memory_type": memory_type,
+            "content": content,
+            "importance": importance,
+            "source_metadata": source_metadata or {},
+            "kv_triples": kv_triples or [],
+            "graph_triples": graph_triples or [],
+        }
+        scoped_user = _scope_id(user_id)
+        scoped_agent = _scope_id(agent_id)
+        if scoped_user is not None:
+            body["user_id"] = scoped_user
+        if scoped_agent is not None:
+            body["agent_id"] = scoped_agent
         response = self._http.post(
             "/memories",
             headers=self._headers(),
-            json={
-                "session_id": session_id,
-                "memory_type": memory_type,
-                "content": content,
-                "importance": importance,
-                "source_metadata": source_metadata or {},
-                "kv_triples": kv_triples or [],
-                "graph_triples": graph_triples or [],
-            },
+            json=body,
         )
         _raise_for_status(response)
         return Memory.model_validate(response.json())
@@ -115,6 +131,8 @@ class Memoria:
         as_of: str | None = None,
         explain: bool = False,
         token_budget: int = 2048,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> MemorySearchResult:
         params: dict[str, Any] = {"q": q, "limit": limit, "token_budget": token_budget}
         if session_id:
@@ -123,6 +141,12 @@ class Memoria:
             params["as_of"] = as_of
         if explain:
             params["explain"] = "true"
+        scoped_user = _scope_id(user_id)
+        scoped_agent = _scope_id(agent_id)
+        if scoped_user is not None:
+            params["user_id"] = scoped_user
+        if scoped_agent is not None:
+            params["agent_id"] = scoped_agent
         response = self._http.get("/memories/search", headers=self._headers(), params=params)
         _raise_for_status(response)
         return MemorySearchResult.model_validate(response.json())
@@ -202,15 +226,24 @@ class Memoria:
         session_id: str,
         event_type: str,
         payload: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> EmitResult:
+        body: dict[str, Any] = {
+            "session_id": session_id,
+            "event_type": event_type,
+            "payload": payload or {},
+        }
+        scoped_user = _scope_id(user_id)
+        scoped_agent = _scope_id(agent_id)
+        if scoped_user is not None:
+            body["user_id"] = scoped_user
+        if scoped_agent is not None:
+            body["agent_id"] = scoped_agent
         response = self._http.post(
             "/events",
             headers=self._headers(),
-            json={
-                "session_id": session_id,
-                "event_type": event_type,
-                "payload": payload or {},
-            },
+            json=body,
         )
         _raise_for_status(response)
         return EmitResult.model_validate(response.json())

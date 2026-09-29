@@ -92,6 +92,8 @@ def remember(
     session_id: str | None = None,
     memory_type: str = "semantic",
     importance: float = 0.5,
+    user_id: str | None = None,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Store a durable memory now. Prefer emit for ordinary conversation.
 
@@ -105,6 +107,8 @@ def remember(
         memory_type=memory_type,
         content=content,
         importance=importance,
+        user_id=user_id,
+        agent_id=agent_id,
     ).model_dump(mode="json")
 
 
@@ -114,6 +118,8 @@ def recall(
     session_id: str | None = None,
     limit: int = 10,
     as_of: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Search memories by semantic similarity across the org.
 
@@ -126,6 +132,8 @@ def recall(
         q=q,
         limit=limit,
         as_of=as_of,
+        user_id=user_id,
+        agent_id=agent_id,
     ).model_dump(mode="json")
 
 
@@ -159,6 +167,8 @@ def emit(
     event_type: str,
     payload: dict[str, Any] | None = None,
     session_id: str | None = None,
+    user_id: str | None = None,
+    agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Buffer a harness event. Call this yourself after user turns; do not wait
     for the user to ask. Not every event becomes a memory.
@@ -174,6 +184,8 @@ def emit(
         session_id=sid,
         event_type=event_type,
         payload=payload or {},
+        user_id=user_id,
+        agent_id=agent_id,
     ).model_dump(mode="json")
     if event_type == "session_end":
         _rotate_auto_session(used_explicit=used_explicit)

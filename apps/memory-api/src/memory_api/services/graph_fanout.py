@@ -41,6 +41,8 @@ def persist_graph_facts(
                         triple["object"],
                         memory_id=memory.id,
                         confidence=confidence,
+                        user_id=memory.user_id,
+                        agent_id=memory.agent_id,
                     )
             else:
                 graph.add_edge(
@@ -50,6 +52,8 @@ def persist_graph_facts(
                     triple["object"],
                     memory_id=memory.id,
                     confidence=confidence,
+                    user_id=memory.user_id,
+                    agent_id=memory.agent_id,
                 )
         except Exception:
             logger.exception("graph fan-out failed")

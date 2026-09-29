@@ -38,6 +38,8 @@ def persist_kv_facts(
                         triple["entity"],
                         value=triple.get("value"),
                         importance=memory.importance,
+                        user_id=memory.user_id,
+                        agent_id=memory.agent_id,
                     )
             else:
                 kv.put(
@@ -47,6 +49,8 @@ def persist_kv_facts(
                     triple["entity"],
                     value=triple.get("value"),
                     importance=memory.importance,
+                    user_id=memory.user_id,
+                    agent_id=memory.agent_id,
                 )
         except Exception:
             logger.exception("kv fan-out failed")

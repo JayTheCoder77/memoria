@@ -8,6 +8,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session
 
 from memory_api.db.models import Memory, MemoryType
+from memory_api.services.scope import scope_matches
 
 
 class MemoryRepository(Protocol):
@@ -23,6 +24,8 @@ class MemoryRepository(Protocol):
         source_metadata: dict,
         embedding_model: str = "hash",
         embedding_version: int = 1,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> Memory: ...
 
     def search(
@@ -33,6 +36,8 @@ class MemoryRepository(Protocol):
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]: ...
 
     def similar(
@@ -43,6 +48,8 @@ class MemoryRepository(Protocol):
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]: ...
 
     def list(
@@ -52,6 +59,8 @@ class MemoryRepository(Protocol):
         session_id: str | None = None,
         memory_type: MemoryType | None = None,
         q: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[Memory]: ...
 
     def get(self, *, org_id: uuid.UUID, memory_id: uuid.UUID) -> Memory | None: ...
@@ -66,6 +75,8 @@ def search_statement(
     embedding_model: str,
     session_id: str | None = None,
     limit: int = 10,
+    user_id: str | None = None,
+    agent_id: str | None = None,
 ) -> Select:
     distance = Memory.embedding.cosine_distance(query_embedding)
     stmt = select(Memory, distance.label("distance")).where(
@@ -74,6 +85,10 @@ def search_statement(
     )
     if session_id is not None:
         stmt = stmt.where(Memory.session_id == session_id)
+    if user_id is not None:
+        stmt = stmt.where(Memory.user_id == user_id)
+    if agent_id is not None:
+        stmt = stmt.where(Memory.agent_id == agent_id)
     return stmt.order_by(distance).limit(limit)
 
 
@@ -103,6 +118,8 @@ class PostgresMemoryRepository:
         source_metadata: dict,
         embedding_model: str = "hash",
         embedding_version: int = 1,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> Memory:
         memory = Memory(
             org_id=org_id,
@@ -114,6 +131,8 @@ class PostgresMemoryRepository:
             source_metadata=source_metadata,
             embedding_model=embedding_model,
             embedding_version=embedding_version,
+            user_id=user_id,
+            agent_id=agent_id,
         )
         self._session.add(memory)
         self._session.flush()
@@ -127,6 +146,8 @@ class PostgresMemoryRepository:
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]:
         rows = self._session.execute(
             search_statement(
@@ -135,6 +156,8 @@ class PostgresMemoryRepository:
                 embedding_model=embedding_model,
                 session_id=session_id,
                 limit=limit,
+                user_id=user_id,
+                agent_id=agent_id,
             )
         ).all()
         results: list[tuple[Memory, float]] = []
@@ -152,6 +175,8 @@ class PostgresMemoryRepository:
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]:
         rows = self._session.execute(
             search_statement(
@@ -160,6 +185,8 @@ class PostgresMemoryRepository:
                 embedding_model=embedding_model,
                 session_id=session_id,
                 limit=limit,
+                user_id=user_id,
+                agent_id=agent_id,
             )
         ).all()
         return [(memory, 1.0 - float(dist)) for memory, dist in rows]
@@ -171,6 +198,8 @@ class PostgresMemoryRepository:
         session_id: str | None = None,
         memory_type: MemoryType | None = None,
         q: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[Memory]:
         stmt = select(Memory).where(Memory.org_id == org_id)
         if session_id is not None:
@@ -179,6 +208,10 @@ class PostgresMemoryRepository:
             stmt = stmt.where(Memory.memory_type == memory_type)
         if q:
             stmt = stmt.where(Memory.content.ilike(f"%{q}%"))
+        if user_id is not None:
+            stmt = stmt.where(Memory.user_id == user_id)
+        if agent_id is not None:
+            stmt = stmt.where(Memory.agent_id == agent_id)
         stmt = stmt.order_by(Memory.created_at.desc())
         return list(self._session.scalars(stmt))
 
@@ -212,6 +245,8 @@ class InMemoryMemoryRepository:
         source_metadata: dict,
         embedding_model: str = "hash",
         embedding_version: int = 1,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> Memory:
         memory = Memory(
             id=uuid.uuid4(),
@@ -226,6 +261,8 @@ class InMemoryMemoryRepository:
             embedding_version=embedding_version,
             access_count=0,
             created_at=datetime.now(UTC),
+            user_id=user_id,
+            agent_id=agent_id,
         )
         self._rows.append(memory)
         return memory
@@ -238,11 +275,17 @@ class InMemoryMemoryRepository:
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]:
         candidates = [
             row
             for row in self._rows
-            if row.org_id == org_id and row.embedding_model == embedding_model
+            if row.org_id == org_id
+            and row.embedding_model == embedding_model
+            and scope_matches(
+                row.user_id, row.agent_id, user_id=user_id, agent_id=agent_id
+            )
         ]
         if session_id is not None:
             candidates = [row for row in candidates if row.session_id == session_id]
@@ -265,11 +308,17 @@ class InMemoryMemoryRepository:
         embedding_model: str,
         session_id: str | None = None,
         limit: int = 10,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[tuple[Memory, float]]:
         candidates = [
             row
             for row in self._rows
-            if row.org_id == org_id and row.embedding_model == embedding_model
+            if row.org_id == org_id
+            and row.embedding_model == embedding_model
+            and scope_matches(
+                row.user_id, row.agent_id, user_id=user_id, agent_id=agent_id
+            )
         ]
         if session_id is not None:
             candidates = [row for row in candidates if row.session_id == session_id]
@@ -289,8 +338,17 @@ class InMemoryMemoryRepository:
         session_id: str | None = None,
         memory_type: MemoryType | None = None,
         q: str | None = None,
+        user_id: str | None = None,
+        agent_id: str | None = None,
     ) -> list[Memory]:
-        rows = [row for row in self._rows if row.org_id == org_id]
+        rows = [
+            row
+            for row in self._rows
+            if row.org_id == org_id
+            and scope_matches(
+                row.user_id, row.agent_id, user_id=user_id, agent_id=agent_id
+            )
+        ]
         if session_id is not None:
             rows = [row for row in rows if row.session_id == session_id]
         if memory_type is not None:

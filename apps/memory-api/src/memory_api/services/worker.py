@@ -15,6 +15,23 @@ from memory_api.stores.noop import NoOpGraphStore, NoOpKVStore
 from memory_api.stores.protocols import GraphStore, KVStore
 
 
+def _scope_value(payload: dict, key: str) -> str | None:
+    raw = payload.get(key)
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    return text or None
+
+
+def _batch_key(row: EventBuffer) -> tuple[object, str, str | None, str | None]:
+    return (
+        row.org_id,
+        row.session_id,
+        _scope_value(row.payload, "user_id"),
+        _scope_value(row.payload, "agent_id"),
+    )
+
+
 def run_once(
     *,
     events: EventStore,
@@ -36,7 +53,7 @@ def run_once(
         created = 0
         grouped: dict[tuple[object, str], list[EventBuffer]] = {}
         for row in claimed:
-            grouped.setdefault((row.org_id, row.session_id), []).append(row)
+            grouped.setdefault(_batch_key(row), []).append(row)
         for batch in grouped.values():
             org_id = batch[0].org_id
             batch_extractor = (
@@ -75,6 +92,8 @@ def _process(
     created = 0
     session_id = claimed[0].session_id
     org_id = claimed[0].org_id
+    user_id = _scope_value(claimed[0].payload, "user_id")
+    agent_id = _scope_value(claimed[0].payload, "agent_id")
     for candidate in extractor.extract(payload):
         memory, inserted = persist_candidate(
             repo=repo,
@@ -83,6 +102,8 @@ def _process(
             session_id=session_id,
             candidate=candidate,
             threshold=threshold,
+            user_id=user_id,
+            agent_id=agent_id,
         )
         persist_kv_facts(
             kv=kv,
