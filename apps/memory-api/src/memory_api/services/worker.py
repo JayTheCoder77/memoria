@@ -43,10 +43,11 @@ def run_once(
     extractor_for_org: Callable[[UUID], Extractor] | None = None,
     kv: KVStore | None = None,
     graph: GraphStore | None = None,
+    group_window_seconds: int = 120,
 ) -> int:
     kv = kv or NoOpKVStore()
     graph = graph or NoOpGraphStore()
-    claimed = events.claim_ready(batch_size)
+    claimed = events.claim_ready(batch_size, group_window_seconds=group_window_seconds)
     if not claimed:
         return 0
     try:

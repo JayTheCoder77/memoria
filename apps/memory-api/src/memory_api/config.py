@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     openrouter_http_referer: str = "http://localhost:3000"
     openrouter_app_title: str = "Memoria"
     extract_batch_size: int = 10
+    extract_group_window_seconds: int = 120
     dedup_threshold: float = 0.92
     consolidate_threshold: float = 0.85
     enable_kv: bool = True

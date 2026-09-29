@@ -46,6 +46,7 @@ def tick(*, embedder: Embedder | None = None) -> int:
                 extractor=HeuristicExtractor(),
                 extractor_for_org=extractor_for_org,
                 batch_size=settings.extract_batch_size,
+                group_window_seconds=settings.extract_group_window_seconds,
                 threshold=settings.dedup_threshold,
                 kv=kv,
                 graph=graph,

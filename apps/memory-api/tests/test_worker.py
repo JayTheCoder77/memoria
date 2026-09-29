@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -8,11 +9,21 @@ from memory_api.db.events import InMemoryEventStore
 from memory_api.db.models import EventStatus, MemoryType
 from memory_api.db.repository import InMemoryMemoryRepository
 from memory_api.services.embedding import HashEmbedder
-from memory_api.services.extraction import HeuristicExtractor, LlmExtractor
+from memory_api.services.extraction import Candidate, HeuristicExtractor, LlmExtractor
 from memory_api.services.llm_json import LlmProvider
 from memory_api.services.worker import run_once
 from memory_api.stores.graph import InMemoryGraphStore
 from memory_api.stores.kv import InMemoryKVStore
+
+
+class _CountingExtractor:
+    def __init__(self) -> None:
+        self.calls: list[list[dict]] = []
+        self._inner = HeuristicExtractor()
+
+    def extract(self, events: list[dict]) -> list[Candidate]:
+        self.calls.append(events)
+        return self._inner.extract(events)
 
 
 def test_worker_extracts_on_session_end_and_skips_noise() -> None:
@@ -226,3 +237,67 @@ def test_worker_llm_http_error_still_extracts_with_heuristic() -> None:
     assert created == 1
     assert all(row.status == EventStatus.processed for row in events._rows)
     assert kv.get(org_id, "preference", "pytest") is not None
+
+
+def test_two_messages_one_second_apart_produce_one_extractor_call_when_window_is_zero() -> None:
+    events = InMemoryEventStore()
+    repo = InMemoryMemoryRepository()
+    extractor = _CountingExtractor()
+    org_id = uuid.uuid4()
+    first = events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer pytest over unittest."},
+    )
+    second = events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer bun for JS."},
+    )
+    newest = datetime.now(UTC) - timedelta(seconds=1)
+    first.created_at = newest - timedelta(seconds=1)
+    second.created_at = newest
+    created = run_once(
+        events=events,
+        repo=repo,
+        embedder=HashEmbedder(),
+        extractor=extractor,
+        batch_size=10,
+        group_window_seconds=0,
+    )
+    assert len(extractor.calls) == 1
+    assert [event["event_type"] for event in extractor.calls[0]] == ["message", "message"]
+    assert created == 2
+    assert all(row.status == EventStatus.processed for row in events._rows)
+
+
+def test_session_end_flushes_immediately_when_window_is_120() -> None:
+    events = InMemoryEventStore()
+    repo = InMemoryMemoryRepository()
+    extractor = _CountingExtractor()
+    org_id = uuid.uuid4()
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="message",
+        payload={"content": "We prefer pytest over unittest."},
+    )
+    events.enqueue(
+        org_id=org_id,
+        session_id="s1",
+        event_type="session_end",
+        payload={},
+    )
+    created = run_once(
+        events=events,
+        repo=repo,
+        embedder=HashEmbedder(),
+        extractor=extractor,
+        batch_size=10,
+        group_window_seconds=120,
+    )
+    assert len(extractor.calls) == 1
+    assert created == 1
+    assert all(row.status == EventStatus.processed for row in events._rows)

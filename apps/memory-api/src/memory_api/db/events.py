@@ -22,7 +22,9 @@ class EventStore(Protocol):
 
     def pending(self, session_id: str) -> list[EventBuffer]: ...
 
-    def claim_ready(self, batch_size: int) -> list[EventBuffer]: ...
+    def claim_ready(
+        self, batch_size: int, *, group_window_seconds: int = 120
+    ) -> list[EventBuffer]: ...
 
     def mark_processed(self, events: list[EventBuffer]) -> None: ...
 
@@ -31,6 +33,21 @@ class EventStore(Protocol):
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value
+
+
+def _group_ready(batch: list[EventBuffer], *, batch_size: int, group_window_seconds: int) -> bool:
+    if any(item.event_type == "session_end" for item in batch):
+        return True
+    if len(batch) >= batch_size:
+        return True
+    newest = max(_aware(item.created_at) for item in batch)
+    return (_utcnow() - newest).total_seconds() > group_window_seconds
 
 
 class InMemoryEventStore:
@@ -64,7 +81,7 @@ class InMemoryEventStore:
             if row.session_id == session_id and row.status == EventStatus.pending
         ]
 
-    def claim_ready(self, batch_size: int) -> list[EventBuffer]:
+    def claim_ready(self, batch_size: int, *, group_window_seconds: int = 120) -> list[EventBuffer]:
         grouped: dict[tuple[uuid.UUID, str], list[EventBuffer]] = {}
         for row in sorted(self._rows, key=lambda item: item.created_at):
             if row.status != EventStatus.pending:
@@ -72,10 +89,9 @@ class InMemoryEventStore:
             grouped.setdefault((row.org_id, row.session_id), []).append(row)
         claimed: list[EventBuffer] = []
         for batch in grouped.values():
-            ready = len(batch) >= batch_size or any(
-                item.event_type == "session_end" for item in batch
-            )
-            if not ready:
+            if not _group_ready(
+                batch, batch_size=batch_size, group_window_seconds=group_window_seconds
+            ):
                 continue
             for item in batch:
                 item.status = EventStatus.processing
@@ -129,7 +145,7 @@ class PostgresEventStore:
             )
         )
 
-    def claim_ready(self, batch_size: int) -> list[EventBuffer]:
+    def claim_ready(self, batch_size: int, *, group_window_seconds: int = 120) -> list[EventBuffer]:
         pending = list(
             self._session.scalars(
                 select(EventBuffer)
@@ -143,10 +159,9 @@ class PostgresEventStore:
             grouped.setdefault((row.org_id, row.session_id), []).append(row)
         claimed: list[EventBuffer] = []
         for batch in grouped.values():
-            ready = len(batch) >= batch_size or any(
-                item.event_type == "session_end" for item in batch
-            )
-            if not ready:
+            if not _group_ready(
+                batch, batch_size=batch_size, group_window_seconds=group_window_seconds
+            ):
                 continue
             for item in batch:
                 item.status = EventStatus.processing
